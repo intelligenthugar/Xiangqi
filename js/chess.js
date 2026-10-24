@@ -41,7 +41,7 @@ async function connectFirebase(){
     const credential=await firebaseApi.signInAnonymously(auth);user=credential.user;$('online-status').textContent='Firebase 已連線（匿名玩家），可以建立或加入房間。';attemptAutoJoinInvite();
   }catch(e){$('online-status').textContent=`Firebase 連線失敗：${explainFirebaseError(e,'連線')}`;console.error(e)}
 }
-const ref=(...a)=>firebaseApi.ref(...a),get=(...a)=>firebaseApi.get(...a),set=(...a)=>firebaseApi.set(...a),update=(...a)=>firebaseApi.update(...a),onValue=(...a)=>firebaseApi.onValue(...a),runTransaction=(...a)=>firebaseApi.runTransaction(...a);
+const ref=(...a)=>firebaseApi.ref(...a),get=(...a)=>firebaseApi.get(...a),set=(...a)=>firebaseApi.set(...a),update=(...a)=>firebaseApi.update(...a),onValue=(...a)=>firebaseApi.onValue(...a),runTransaction=(...a)=>firebaseApi.runTransaction(...a),onDisconnect=(...a)=>firebaseApi.onDisconnect(...a);
 function explainFirebaseError(e, action){
   const code=e?.code||'';
   if(code.includes('permission-denied')) return 'Firebase 拒絕存取：請確認 Realtime Database Rules 已發布，且允許已匿名登入的玩家讀寫房間。';
@@ -108,7 +108,9 @@ async function joinRoom(){
     }
     let failureReason='';
     const result=await runTransaction(r,room=>{
-      if(!room){failureReason='找不到房間，代碼可能無效。';return;}
+      // Realtime Database transaction updater may first receive local null even after get() succeeded.
+      // Use the just-read snapshot as a fallback so this cache miss does not falsely reject a valid room.
+      if(!room) room={...old,players:{...(old.players||{})}};
       if(room.players?.red===user.uid||room.players?.black===user.uid){failureReason='你已經在這個房間內。';return;}
       if(room.status!=='waiting'){failureReason='這個房間已經開始或結束。';return;}
       if(room.players?.red&&room.players?.black){failureReason='此代碼已經有兩個人使用，房間已滿。';return;}
@@ -127,7 +129,65 @@ async function joinRoom(){
   }catch(e){console.error(e);showRoomAlert('加入房間失敗',explainFirebaseError(e,'加入房間'));}
   finally{if(!roomCode){btn.disabled=false;btn.textContent='加入房間';}}
 }
-function enterRoom(code){roomCode=code;$('room-info').hidden=false;$('room-code-display').textContent=code;$('create-room-btn').disabled=true;$('join-room-btn').disabled=true;$('room-code-input').disabled=true;onlineReady=true;if(roomUnsubscribe)roomUnsubscribe();roomUnsubscribe=onValue(ref(db,`rooms/${code}`),snap=>{const room=snap.val();if(!room){setStatus('房間已不存在');onlineReady=false;return}if(room.players?.red===user.uid)myColor='red';else if(room.players?.black===user.uid)myColor='black';else{setStatus('你不是此房間的玩家');onlineReady=false;return}renderBoard();if(room.status==='waiting')$('room-waiting').textContent='等待黑方玩家加入…';else $('room-waiting').textContent='對局進行中';if(room.board){applyingRemote=true;chessPieces=Array.from({length:90},(_,i)=>room.board?.[i]??null);chessTurn=room.turn||'red';lastMove=room.lastMove||null;chessGameOver=room.status==='finished';chessSelectedIdx=-1;chessValidMoves=[];chessDangerMoves=[];renderBoard();updateStatus();applyingRemote=false}if(room.status==='finished'&&room.winner&&!$('win-modal').hidden===false){$('winner-message').textContent=`${room.winner==='red'?'紅方':'黑方'}獲勝`;$('winner-reason').textContent=room.reason||'';showModal('win-modal')}})}
+function enterRoom(code){
+  roomCode=code;
+  $('room-info').hidden=false;
+  $('room-code-display').textContent=code;
+  $('create-room-btn').disabled=true;
+  $('join-room-btn').disabled=true;
+  $('room-code-input').disabled=true;
+  onlineReady=true;
+  if(roomUnsubscribe)roomUnsubscribe();
+  roomUnsubscribe=onValue(ref(db,`rooms/${code}`),snap=>{
+    const room=snap.val();
+    if(!room){setStatus('房間已不存在');onlineReady=false;return;}
+    if(room.players?.red===user.uid)myColor='red';
+    else if(room.players?.black===user.uid)myColor='black';
+    else{setStatus('你不是此房間的玩家');onlineReady=false;return;}
+
+    const otherColor=myColor==='red'?'black':'red';
+    const otherLabel=otherColor==='red'?'紅方':'黑方';
+    const otherPresence=room.presence?.[otherColor];
+    let presenceText;
+    if(otherPresence?.online===true) presenceText=`🟢 ${otherLabel}：在線上`;
+    else if(otherPresence?.online===false) presenceText=`⚪ ${otherLabel}：已離線`;
+    else presenceText=`🟡 ${otherLabel}：尚未確認連線`;
+    const presenceEl=$('opponent-presence');
+    if(presenceEl)presenceEl.textContent=presenceText;
+
+    if(room.status==='waiting')$('room-waiting').textContent='等待黑方玩家加入…';
+    else if(room.status==='playing')$('room-waiting').textContent='對局進行中';
+    else if(room.status==='finished')$('room-waiting').textContent='本局已結束';
+    if(room.board){
+      applyingRemote=true;
+      chessPieces=Array.from({length:90},(_,i)=>room.board?.[i]??null);
+      chessTurn=room.turn||'red';lastMove=room.lastMove||null;
+      chessGameOver=room.status==='finished';chessSelectedIdx=-1;chessValidMoves=[];chessDangerMoves=[];
+      renderBoard();updateStatus();applyingRemote=false;
+    }
+    if(room.status==='finished'&&room.winner&&$('win-modal').hidden){
+      $('winner-message').textContent=`${room.winner==='red'?'紅方':'黑方'}獲勝`;
+      $('winner-reason').textContent=room.reason||'';showModal('win-modal');
+    }
+  },error=>{
+    console.error('房間即時監聽失敗',error);
+    setStatus(`房間同步失敗：${explainFirebaseError(error,'讀取房間')}`);
+  });
+  // Firebase onDisconnect marks this player offline if the tab closes, the device loses connection,
+  // or the browser process exits. Re-register on every .info/connected transition.
+  const myPresenceRef=ref(db,`rooms/${code}/presence/${myColor}`);
+  onValue(ref(db,'.info/connected'),async snap=>{
+    if(snap.val()!==true||!user||!myColor)return;
+    try{
+      await onDisconnect(myPresenceRef).set({online:false,lastSeen:Date.now(),uid:user.uid});
+      await set(myPresenceRef,{online:true,lastSeen:Date.now(),uid:user.uid});
+    }catch(error){
+      console.error('設定玩家在線狀態失敗',error);
+      const el=$('opponent-presence');
+      if(el)el.textContent='⚠️ 無法更新在線狀態（請檢查 Firebase Rules）';
+    }
+  });
+}
 async function sendMove(){if(!roomCode||!db||!user)return;const roomRef=ref(db,`rooms/${roomCode}`);try{const result=await runTransaction(roomRef,room=>{if(!room||room.status!=='playing'||room.players?.[myColor]!==user.uid||room.turn!==myColor)return;room.board=chessPieces;room.turn=chessTurn;room.lastMove=lastMove;room.moveCount=(room.moveCount||0)+1;return room});if(!result.committed)setStatus('棋步未同步：可能已輪到對方或連線規則拒絕寫入')}catch(e){setStatus(`同步失敗：${e.message}`)}}
 async function copyText(text){
   if(navigator.clipboard&&window.isSecureContext){await navigator.clipboard.writeText(text);return true;}
