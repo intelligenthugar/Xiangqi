@@ -127,8 +127,13 @@ async function joinRoom(){
       showRoomAlert('無法加入房間','這個房間已經開始或已結束，不能再加入。請使用新的房間代碼。');return;
     }
     let failureReason='';
+    // Firebase RTDB 的 transaction 更新函式，第一次可能先收到本機快取的 null，
+    // 即使上面的 get(r) 已經讀到房間。不能直接把這個 null 當成房間不存在並中止。
     const result=await runTransaction(r,room=>{
-      if(!room){failureReason='找不到房間，代碼可能無效。';return;}
+      if(!room){
+        // 用剛才從伺服器確認存在的快照作為初始值；若伺服器資料已變更，RTDB 會重試此函式。
+        room={...old,players:{...(old.players||{})}};
+      }
       if(room.players?.red===user.uid||room.players?.black===user.uid){failureReason='你已經在這個房間內。';return;}
       if(room.status!=='waiting'){failureReason='這個房間已經開始或結束。';return;}
       if(room.players?.red&&room.players?.black){failureReason='此代碼已經有兩個人使用，房間已滿。';return;}
