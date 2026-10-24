@@ -36,7 +36,9 @@ async function connectFirebase(){
       import('https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js')
     ]);
     firebaseApi={...appMod,...authMod,...dbMod};
-    app=firebaseApi.initializeApp(firebaseConfig);auth=firebaseApi.getAuth(app);db=firebaseApi.getDatabase(app);
+    app=firebaseApi.initializeApp(firebaseConfig);auth=firebaseApi.getAuth(app);
+    // 明確指定設定檔中的資料庫網址，避免未明確選到預期的 Realtime Database。
+    db=firebaseApi.getDatabase(app, firebaseConfig.databaseURL);
     firebaseApi.onAuthStateChanged(auth,u=>{user=u;if(u){$('online-status').textContent='Firebase 已連線（匿名玩家），可以建立或加入房間。';attemptAutoJoinInvite();}});
     const credential=await firebaseApi.signInAnonymously(auth);user=credential.user;$('online-status').textContent='Firebase 已連線（匿名玩家），可以建立或加入房間。';attemptAutoJoinInvite();
   }catch(e){$('online-status').textContent=`Firebase 連線失敗：${explainFirebaseError(e,'連線')}`;console.error(e)}
@@ -94,7 +96,25 @@ async function joinRoom(){
     // 先讀取以便提供清楚的錯誤原因；再用 transaction 防止兩人同時搶入同一個位置。
     const before=await get(r);
     if(!before.exists()){
-      showRoomAlert('加入房間失敗',`代碼 ${code} 無效：找不到這個房間。請確認代碼，或請房主重新建立房間。`);return;
+      // 額外診斷：若目前規則允許讀取 rooms 根節點，列出實際可見的房號，
+      // 協助辨識手機讀到不同資料庫、部署舊設定，或房號大小寫／輸入不一致。
+      let diagnostic = `查詢路徑：rooms/${code}\n資料庫：${firebaseConfig.databaseURL || '未設定'}\n專案：${firebaseConfig.projectId || '未設定'}`;
+      try {
+        const roomsSnap = await get(ref(db, 'rooms'));
+        const rooms = roomsSnap.val() || {};
+        const keys = Object.keys(rooms);
+        const exact = keys.find(k => k.toUpperCase() === code);
+        if (exact) {
+          diagnostic += `\n\n找到大小寫不同的房號：${exact}。請確認房號是否完全一致。`;
+        } else if (keys.length) {
+          diagnostic += `\n\n這個資料庫目前可讀到的房號：${keys.slice(0, 12).join(', ')}${keys.length > 12 ? '…' : ''}`;
+        } else {
+          diagnostic += '\n\n目前這個資料庫的 rooms 節點是空的。';
+        }
+      } catch (diagnosticError) {
+        diagnostic += `\n\n無法讀取 rooms 清單（可能是規則只允許讀取單一房間）：${diagnosticError?.code || diagnosticError?.message || '未知原因'}`;
+      }
+      showRoomAlert('加入房間失敗：目前資料庫查不到這組房號', `房號：${code}\n\n${diagnostic}\n\n請把這段診斷內容傳給我；不要傳 apiKey 或其他私密資料。`);return;
     }
     const old=before.val();
     if(old.players?.red===user.uid||old.players?.black===user.uid){
