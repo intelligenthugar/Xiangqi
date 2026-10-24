@@ -24,3 +24,7 @@
 #chess-board .chess-piece.black{color:#171717!important;border:2px solid #333!important;text-shadow:0 0 .5px #000;}
 
 .room-share-actions{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0}.invite-btn{background:#1976d2}.invite-btn:hover{background:#1565c0}#room-info #room-waiting{overflow-wrap:anywhere;line-height:1.5}@media(max-width:600px){.room-share-actions{flex-direction:column}.room-share-actions button{width:100%}}
+
+/* 線上黑方視角：整個棋盤旋轉 180 度；棋子字樣依雙人模式既有設定保持黑方字樣正向。 */
+.chess-board.online-black-view{transform:rotate(180deg);}
+.chess-board.online-black-view .chess-cell.selected .chess-piece.black{transform:rotate(180deg) scale(1.18);}
