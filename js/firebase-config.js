@@ -1,5 +1,3 @@
-// 請將以下範例值替換成 Firebase Console → 專案設定 → 您的應用程式中的真實值。
-// databaseURL 請使用 Realtime Database 頁面實際顯示的網址。
 export const firebaseConfig = {
   apiKey: "AIzaSyA_Zw9uh6abQoO_3sig6aWjSSRsuDuohho",
   authDomain: "xiangqi-c53a8.firebaseapp.com",
