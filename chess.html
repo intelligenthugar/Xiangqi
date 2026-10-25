@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="zh-TW"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"><title>中國象棋</title><link rel="stylesheet" href="css/style.css?v=20261025-public-lobby-2"></head>
+<html lang="zh-TW"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"><title>中國象棋</title><link rel="stylesheet" href="css/style.css?v=20261025-room-exit-1"></head>
 <body class="dark-mode">
 <header class="topbar game-topbar"><a class="btn-home button-link" href="index.html">🏠 首頁</a><strong id="header-title">🪨 中國象棋（傳統大棋盤）</strong><div class="top-actions"><button class="btn-lang" id="lang-btn" onclick="toggleLanguage()">English</button><button class="btn-theme" id="theme-btn" onclick="toggleDarkMode()">☀️ 淺色</button></div></header>
 <main class="game-view">
@@ -17,7 +17,7 @@
   </div>
   <div class="online-actions"><button id="create-room-btn">建立房間</button><div class="join-row"><input id="room-code-input" maxlength="6" placeholder="輸入 6 碼房間代碼" autocomplete="off"><button id="join-room-btn">加入房間</button></div></div>
   <p class="small muted">暱稱只用於顯示。此原型的房間密碼是前端檢查，不能取代伺服器端安全驗證。</p>
-  <div id="room-info" hidden><p>房間代碼：<strong id="room-code-display"></strong></p><div class="room-share-actions"><button id="copy-room-btn" class="secondary-btn">📋 複製房間代碼</button><button id="copy-invite-btn" class="invite-btn">🔗 複製邀請網址</button></div><p id="room-role"></p><p id="room-players-display">紅方：等待玩家　｜　黑方：等待玩家</p><p id="opponent-presence" role="status" aria-live="polite">🟡 對手狀態：尚未確認</p><p id="room-waiting"></p></div>
+  <div id="room-info" hidden><p>房間代碼：<strong id="room-code-display"></strong></p><div class="room-share-actions"><button id="copy-room-btn" class="secondary-btn">📋 複製房間代碼</button><button id="copy-invite-btn" class="invite-btn">🔗 複製邀請網址</button></div><p id="room-role"></p><p id="room-players-display">紅方：等待玩家　｜　黑方：等待玩家</p><p id="opponent-presence" role="status" aria-live="polite">🟡 對手狀態：尚未確認</p><p id="room-waiting"></p><button id="leave-room-btn" class="btn-danger" type="button">🚪 離開房間</button></div>
 </section>
 <div class="controls"><span id="chess-mode-title">傳統象棋</span><select id="chess-game-mode"><option value="pve">單人對戰 (AI)</option><option value="pvp">雙人對戰（同裝置）</option></select><select id="chess-ai-level"><option value="easy">AI: 初級</option><option value="hard" selected>AI: 高級 (Minimax)</option></select><button id="restart-btn">重來</button></div>
 <div id="chess-ai-score-container" class="score-board"><span>🤖 象棋 AI 戰績：</span><span class="win">勝: <b id="chess-stat-win">0</b></span><span class="loss">敗: <b id="chess-stat-loss">0</b></span><span class="draw">和: <b id="chess-stat-draw">0</b></span><button id="reset-stats-btn" class="btn-danger tiny">重置</button></div>
@@ -27,5 +27,5 @@
 <div class="modal" id="win-modal" hidden><div class="modal-content"><button class="modal-close" id="close-win">×</button><h2>🏆 遊戲結束！</h2><p id="winner-message"></p><div id="winner-reason" class="reason-box"></div><button id="confirm-win">確定</button></div></div>
 <div class="modal" id="confirm-modal" hidden><div class="modal-content"><p id="confirm-message"></p><div class="modal-buttons"><button class="secondary-btn" id="cancel-confirm">取消</button><button id="accept-confirm">確定</button></div></div></div>
 <footer>Copyright © 2026 · Xiangqi</footer>
-<script type="module" src="js/chess.js?v=20261025-public-lobby-2"></script>
+<script type="module" src="js/chess.js?v=20261025-room-exit-1"></script>
 </body></html>

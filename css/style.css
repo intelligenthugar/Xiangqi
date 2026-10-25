@@ -64,3 +64,9 @@
 .online-public-lobby .public-room-main{min-width:0}
 .online-public-lobby .room-join-link{white-space:nowrap}
 @media(max-width:600px){.online-public-lobby{padding:10px}.online-public-lobby .public-room-card>div:last-child{width:100%}}
+
+/* 房間離開按鈕：在房間資訊區清楚顯示 */
+#leave-room-btn{display:block;width:100%;margin-top:12px;padding:11px 16px;background:#d32f2f;color:#fff;font-weight:800;border-radius:8px}
+#leave-room-btn:hover{background:#b71c1c}
+#leave-room-btn:disabled{opacity:.65;cursor:wait}
+.online-public-lobby{margin:12px 0}
