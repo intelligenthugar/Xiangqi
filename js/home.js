@@ -71,7 +71,7 @@ function renderTopStatus(control = latestSiteControl) {
   document.body.classList.toggle('has-site-announcement', !!message);
 }
 
-setInterval(() => renderTopStatus(), 1000);
+setInterval(() => { renderTopStatus(); const closeAt = Number(latestSiteControl.autoCloseAt || 0); if (latestSiteControl.playEnabled !== false && closeAt > Date.now() && closeAt - Date.now() <= 60000) showMaintenanceNotice(`scheduled-${closeAt}`); }, 1000);
 function showMaintenanceNotice(key) {
   if (maintenanceNoticeKey === key || document.getElementById('maintenance-warning-dialog')) return;
   maintenanceNoticeKey = key;
@@ -82,7 +82,7 @@ function showMaintenanceNotice(key) {
   dialog.id = 'maintenance-warning-dialog';
   dialog.setAttribute('role','alertdialog');
   dialog.setAttribute('aria-modal','true');
-  dialog.innerHTML = '<div class="maintenance-warning-card"><h2>⚠️ 系統維護提醒</h2><p>即將關閉系統進行維護更新 你的棋盤將不被儲存:)</p><button type="button" id="maintenance-warning-ok">我知道了</button></div>';
+  dialog.innerHTML = '<div class="maintenance-warning-card"><h2>⚠️ 系統維護提醒</h2><p>即將進行網站維護！請盡快結束目前對局。維護開始後，這場棋局將不會被儲存。</p><button type="button" id="maintenance-warning-ok">我知道了</button></div>';
   document.body.appendChild(dialog);
   document.getElementById('maintenance-warning-ok').addEventListener('click', () => dialog.remove());
 }
@@ -358,32 +358,44 @@ async function initializeAccountSystem() {
       }
       setAccountView(user);
       if (user && !user.isAnonymous && accountProfile?.displayName) await loadAccountMatches(user.uid);
-      else if ($('account-match-list')) $('account-match-list').innerHTML = '<p class="muted small">登入後會載入紀錄。</p>';
+      else { if ($('account-ai-match-list')) $('account-ai-match-list').innerHTML = '<p class="muted small">登入後會載入 AI 戰績。</p>'; if ($('account-online-match-list')) $('account-online-match-list').innerHTML = '<p class="muted small">登入後會載入連線戰績。</p>'; }
     });
   }
 }
 async function loadAccountMatches(uid) {
+  const renderCategory = (matches, prefix, emptyText, modeLabel) => {
+    const stats = {played: matches.length, wins: 0, losses: 0, draws: 0};
+    for (const match of matches) {
+      if (match.result === 'win') stats.wins++;
+      else if (match.result === 'loss') stats.losses++;
+      else stats.draws++;
+    }
+    $(`account-${prefix}-played`).textContent = stats.played;
+    $(`account-${prefix}-wins`).textContent = stats.wins;
+    $(`account-${prefix}-losses`).textContent = stats.losses;
+    $(`account-${prefix}-draws`).textContent = stats.draws;
+    const list = $(`account-${prefix}-match-list`);
+    if (!matches.length) { list.innerHTML = `<p class="muted small">${emptyText}</p>`; return; }
+    list.innerHTML = matches.slice(0, 12).map(m => {
+      const result = m.result === 'win' ? '勝利' : m.result === 'loss' ? '失敗' : '平手';
+      const resultClass = m.result === 'win' ? 'match-win' : m.result === 'loss' ? 'match-loss' : 'match-draw';
+      const level = m.aiLevel === 'easy' ? '初級' : m.aiLevel === 'medium' ? '中級' : '高級';
+      const title = prefix === 'ai' ? `AI 對戰（${level}）` : '多人連線對戰';
+      const date = Number(m.finishedAt) > 0 ? new Date(Number(m.finishedAt)).toLocaleString('zh-TW') : '時間未知';
+      return `<article class="account-match-row"><div><strong>${escapeHtml(title)}</strong><span class="muted small">${escapeHtml(date)} · ${Number(m.moveCount || 0)} 步</span>${m.opponentName ? `<span class="muted small">對手：${escapeHtml(m.opponentName)}</span>` : ''}${m.roomCode ? `<span class="muted small">房號：${escapeHtml(m.roomCode)}</span>` : ''}</div><b class="${resultClass}">${result}</b></article>`;
+    }).join('');
+  };
   try {
     const snap = await accountApi.get(accountApi.ref(accountDb, `users/${uid}/matches`));
     const values = snap.val() || {};
     const matches = Object.entries(values).map(([id, value]) => ({id, ...value})).sort((a,b) => Number(b.finishedAt || 0) - Number(a.finishedAt || 0));
-    const stats = {played: matches.length, wins: 0, losses: 0, draws: 0};
-    for (const match of matches) if (match.result === 'win') stats.wins++; else if (match.result === 'loss') stats.losses++; else stats.draws++;
-    $('account-stat-played').textContent = stats.played;
-    $('account-stat-wins').textContent = stats.wins;
-    $('account-stat-losses').textContent = stats.losses;
-    $('account-stat-draws').textContent = stats.draws;
-    const list = $('account-match-list');
-    if (!matches.length) { list.innerHTML = '<p class="muted small">還沒有對戰紀錄，完成第一場對局後就會顯示在這裡。</p>'; return; }
-    list.innerHTML = matches.slice(0, 12).map(m => {
-      const result = m.result === 'win' ? '勝利' : m.result === 'loss' ? '失敗' : '平手';
-      const resultClass = m.result === 'win' ? 'match-win' : m.result === 'loss' ? 'match-loss' : 'match-draw';
-      const mode = m.mode === 'online' ? '多人連線' : m.mode === 'pvp' ? '單機雙人' : `單機 AI${m.aiLevel ? `（${m.aiLevel === 'easy' ? '初級' : m.aiLevel === 'medium' ? '中級' : '高級'}）` : ''}`;
-      const date = Number(m.finishedAt) > 0 ? new Date(Number(m.finishedAt)).toLocaleString('zh-TW') : '時間未知';
-      return `<article class="account-match-row"><div><strong>${escapeHtml(mode)}</strong><span class="muted small">${escapeHtml(date)} · ${Number(m.moveCount || 0)} 步</span>${m.opponentName ? `<span class="muted small">對手：${escapeHtml(m.opponentName)}</span>` : ''}</div><b class="${resultClass}">${result}</b></article>`;
-    }).join('');
+    // Same-device two-player games are intentionally excluded from account records.
+    renderCategory(matches.filter(m => m.mode === 'pve'), 'ai', '還沒有 AI 對戰紀錄。完成一場 AI 對局後會顯示在這裡。', 'AI');
+    renderCategory(matches.filter(m => m.mode === 'online'), 'online', '還沒有連線對打紀錄。完成一場多人連線對局後會顯示在這裡。', 'Online');
   } catch (e) {
-    $('account-match-list').innerHTML = `<p class="muted small">無法載入戰績：${escapeHtml(e.message || e)}。請確認 Firebase Rules 已允許本人讀取 users/${escapeHtml(uid)}。</p>`;
+    const message = `無法載入戰績：${escapeHtml(e.message || e)}。請確認 Firebase Rules 已允許本人讀取 users/${escapeHtml(uid)}。`;
+    if ($('account-ai-match-list')) $('account-ai-match-list').innerHTML = `<p class="muted small">${message}</p>`;
+    if ($('account-online-match-list')) $('account-online-match-list').innerHTML = `<p class="muted small">${message}</p>`;
   }
 }
 async function registerAccount() {
