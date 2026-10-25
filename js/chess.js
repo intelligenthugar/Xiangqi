@@ -526,7 +526,58 @@ function accountValidEmail(value){const e=String(value||'').trim();return e.leng
 function accountCleanName(v){return String(v||'').replace(/[<>\u0000-\u001f]/g,'').trim().slice(0,18)}
 let chessAccountProfile=null,chessAccountListenerStarted=false;
 function paintChessAccount(userNow=user){const b=$('account-open-btn');if(!b)return;const signed=!!userNow&&!userNow.isAnonymous;const name=chessAccountProfile?.displayName;b.textContent=signed?(name||'設定使用者名稱'):'登入／註冊';b.title=signed?'查看個人資料與對戰紀錄':'登入或建立棋手帳號';if(signed&&!name&&$('account-modal'))$('account-modal').hidden=false;const needs= signed&&!name;if($('account-auth-fields'))$('account-auth-fields').hidden=signed&&!needs;if($('account-profile-area'))$('account-profile-area').hidden=!signed||needs;if($('account-auth-actions'))$('account-auth-actions').hidden=signed;if($('account-setup-save-btn'))$('account-setup-save-btn').hidden=!needs;if($('account-name-label'))$('account-name-label').hidden=!needs;if($('account-username'))$('account-username').hidden=!needs;if($('account-close-btn'))$('account-close-btn').hidden=needs;if($('account-modal-title'))$('account-modal-title').textContent=needs?'請先設定使用者名稱':signed?'👤 我的棋手帳號':'👤 登入／註冊';if($('account-subtitle'))$('account-subtitle').textContent=needs?'第一次登入必須設定名稱，之後可以隨時修改。':signed?'你的對戰紀錄會跟著帳號保存。':'註冊帳號即可保存 AI 與多人連線對戰紀錄。';if(signed&&name){$('account-profile-name').textContent=name;$('account-edit-name').value=name;}}
-async function loadChessAccountMatches(){if(!user||user.isAnonymous||!db||!firebaseApi)return;try{const snap=await get(ref(db,`users/${user.uid}/matches`));const matches=Object.entries(snap.val()||{}).map(([id,v])=>({id,...v})).sort((a,b)=>Number(b.finishedAt||0)-Number(a.finishedAt||0));const render=(items,prefix,empty)=>{const stats={played:items.length,wins:0,losses:0,draws:0};items.forEach(m=>{if(m.result==='win')stats.wins++;else if(m.result==='loss')stats.losses++;else stats.draws++});$(`account-${prefix}-played`).textContent=stats.played;$(`account-${prefix}-wins`).textContent=stats.wins;$(`account-${prefix}-losses`).textContent=stats.losses;$(`account-${prefix}-draws`).textContent=stats.draws;const list=$(`account-${prefix}-match-list`);if(!items.length){list.innerHTML=`<p class="muted small">${empty}</p>`;return}list.innerHTML=items.slice(0,12).map(m=>{const result=m.result==='win'?'勝利':m.result==='loss'?'失敗':'平手',cls=m.result==='win'?'match-win':m.result==='loss'?'match-loss':'match-draw',level=m.aiLevel==='easy'?'初級':m.aiLevel==='medium'?'中級':'高級',title=prefix==='ai'?`AI 對戰（${level}）`:'多人連線對戰';return `<article class="account-match-row"><div><strong>${accountEsc(title)}</strong><span class="muted small">${accountEsc(new Date(Number(m.finishedAt||0)).toLocaleString('zh-TW'))} · ${Number(m.moveCount||0)} 步</span>${m.opponentName?`<span class="muted small">對手：${accountEsc(m.opponentName)}</span>`:''}${m.roomCode?`<span class="muted small">房號：${accountEsc(m.roomCode)}</span>`:''}</div><b class="${cls}">${result}</b></article>`}).join('')}};render(matches.filter(m=>m.mode==='pve'),'ai','還沒有 AI 對戰紀錄。完成一場 AI 對局後會顯示在這裡。');render(matches.filter(m=>m.mode==='online'),'online','還沒有連線對打紀錄。完成一場多人連線對局後會顯示在這裡。')}catch(e){accountSetStatus(`讀取戰績失敗：${e.message||e}，請確認 Firebase Rules。`,true)}}
+async function loadChessAccountMatches() {
+  if (!user || user.isAnonymous || !db || !firebaseApi) return;
+  try {
+    const snap = await get(ref(db, `users/${user.uid}/matches`));
+    const matches = Object.entries(snap.val() || {})
+      .map(([id, value]) => ({ id, ...value }))
+      .sort((a, b) => Number(b.finishedAt || 0) - Number(a.finishedAt || 0));
+
+    function renderMatches(items, prefix, emptyMessage) {
+      const stats = { played: items.length, wins: 0, losses: 0, draws: 0 };
+      items.forEach(match => {
+        if (match.result === 'win') stats.wins++;
+        else if (match.result === 'loss') stats.losses++;
+        else stats.draws++;
+      });
+
+      const playedNode = $(`account-${prefix}-played`);
+      const winsNode = $(`account-${prefix}-wins`);
+      const lossesNode = $(`account-${prefix}-losses`);
+      const drawsNode = $(`account-${prefix}-draws`);
+      const listNode = $(`account-${prefix}-match-list`);
+      if (!playedNode || !winsNode || !lossesNode || !drawsNode || !listNode) return;
+
+      playedNode.textContent = stats.played;
+      winsNode.textContent = stats.wins;
+      lossesNode.textContent = stats.losses;
+      drawsNode.textContent = stats.draws;
+
+      if (items.length === 0) {
+        listNode.innerHTML = `<p class="muted small">${accountEsc(emptyMessage)}</p>`;
+        return;
+      }
+
+      listNode.innerHTML = items.slice(0, 12).map(match => {
+        const resultText = match.result === 'win' ? '勝利' : match.result === 'loss' ? '失敗' : '平手';
+        const resultClass = match.result === 'win' ? 'match-win' : match.result === 'loss' ? 'match-loss' : 'match-draw';
+        const level = match.aiLevel === 'easy' ? '初級' : match.aiLevel === 'medium' ? '中級' : '高級';
+        const title = prefix === 'ai' ? `AI 對戰（${level}）` : '多人連線對戰';
+        const finishedAt = accountEsc(new Date(Number(match.finishedAt || 0)).toLocaleString('zh-TW'));
+        const moveCount = Number(match.moveCount || 0);
+        const opponent = match.opponentName ? `<span class="muted small">對手：${accountEsc(match.opponentName)}</span>` : '';
+        const room = match.roomCode ? `<span class="muted small">房號：${accountEsc(match.roomCode)}</span>` : '';
+        return `<article class="account-match-row"><div><strong>${accountEsc(title)}</strong><span class="muted small">${finishedAt} · ${moveCount} 步</span>${opponent}${room}</div><b class="${resultClass}">${resultText}</b></article>`;
+      }).join('');
+    }
+
+    renderMatches(matches.filter(match => match.mode === 'pve'), 'ai', '還沒有 AI 對戰紀錄。完成一場 AI 對局後會顯示在這裡。');
+    renderMatches(matches.filter(match => match.mode === 'online'), 'online', '還沒有連線對打紀錄。完成一場多人連線對局後會顯示在這裡。');
+  } catch (error) {
+    accountSetStatus(`讀取戰績失敗：${error.message || error}，請確認 Firebase Rules。`, true);
+  }
+}
 async function chessAccountInit(){try{if(!firebaseApi){const [appM,authM,dbM]=await Promise.all([import('https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js'),import('https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js'),import('https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js')]);firebaseApi={...appM,...authM,...dbM};app=firebaseApi.getApps().find(a=>a.name==='xiangqi-player-accounts')||firebaseApi.initializeApp(firebaseConfig,'xiangqi-player-accounts');auth=firebaseApi.getAuth(app);db=firebaseApi.getDatabase(app)}const current=auth.currentUser;if(current){user=current;if(!current.isAnonymous){const snap=await get(ref(db,`users/${current.uid}/profile`));chessAccountProfile=snap.val()||null;paintChessAccount(current);if(chessAccountProfile?.displayName)await loadChessAccountMatches()}else paintChessAccount(current)}if(!chessAccountListenerStarted){chessAccountListenerStarted=true;firebaseApi.onAuthStateChanged(auth,async u=>{user=u;chessAccountProfile=null;if(u&&!u.isAnonymous){try{const snap=await get(ref(db,`users/${u.uid}/profile`));chessAccountProfile=snap.val()||null;if(chessAccountProfile?.displayName){playerDisplayName=chessAccountProfile.displayName;localStorage.setItem('xiangqi-nickname',playerDisplayName);if($('player-nickname'))$('player-nickname').value=playerDisplayName;}}catch(e){accountSetStatus(`讀取個人資料失敗：${e.message||e}`,true)}}paintChessAccount(u);if(u&&!u.isAnonymous&&chessAccountProfile?.displayName)loadChessAccountMatches()})}}catch(e){accountSetStatus(`帳號系統初始化失敗：${e.message||e}`,true)}}
 async function chessAccountAction(kind){try{await chessAccountInit();if(!firebaseApi||!auth)return;const email=$('account-email').value.trim(),password=$('account-password').value;if(kind==='login'||kind==='register'){if(!accountValidEmail(email)){accountSetStatus('必須填寫有效的電子郵件地址，例如 name@example.com。',true);$('account-email').focus();return}if(password.length<6){accountSetStatus('密碼必須至少包含 6 個字元。',true);$('account-password').focus();return}accountSetStatus(kind==='register'?'正在建立帳號…':'正在登入…');if(kind==='register')await firebaseApi.createUserWithEmailAndPassword(auth,email,password);else await firebaseApi.signInWithEmailAndPassword(auth,email,password);accountSetStatus(kind==='register'?'帳號建立成功，請設定使用者名稱。':'登入成功。');return}const u=auth.currentUser;if(kind==='logout'){await firebaseApi.signOut(auth);chessAccountProfile=null;accountSetStatus('已登出。');return}if(!u||u.isAnonymous){accountSetStatus('請先登入帳號。',true);return}const first=!chessAccountProfile?.displayName;const name=accountCleanName(first?$('account-username').value:$('account-edit-name').value);if(!name){accountSetStatus('使用者名稱不可空白。',true);return}await firebaseApi.set(ref(db,`users/${u.uid}/profile`),{displayName:name,email:u.email||'',createdAt:chessAccountProfile?.createdAt||Date.now(),updatedAt:Date.now()});chessAccountProfile={...(chessAccountProfile||{}),displayName:name,email:u.email||''};localStorage.setItem('xiangqi-nickname',name);paintChessAccount(u);await loadChessAccountMatches();accountSetStatus('使用者名稱已儲存。')}catch(e){const msg=e.code==='auth/email-already-in-use'?'這個電子郵件已註冊，請直接登入。':e.code==='auth/invalid-email'?'電子郵件格式不正確。':e.code==='auth/weak-password'?'密碼必須至少包含 6 個字元。':e.code==='auth/invalid-credential'?'電子郵件或密碼錯誤。':`操作失敗：${e.message||e}`;accountSetStatus(msg,true)}}
 $('account-open-btn')?.addEventListener('click',async()=>{if($('account-modal'))$('account-modal').hidden=false;accountSetStatus('');await chessAccountInit();if(!user||user.isAnonymous){$('account-auth-fields').hidden=false;$('account-profile-area').hidden=true}});$('account-close-btn')?.addEventListener('click',()=>{if(user&&!user.isAnonymous&&!chessAccountProfile?.displayName){accountSetStatus('請先設定使用者名稱，才能使用帳號功能。',true);return}$('account-modal').hidden=true});$('account-modal')?.addEventListener('click',e=>{if(e.target===$('account-modal')&&!(user&&!user.isAnonymous&&!chessAccountProfile?.displayName))$('account-modal').hidden=true});$('account-login-btn')?.addEventListener('click',()=>chessAccountAction('login'));$('account-register-btn')?.addEventListener('click',()=>chessAccountAction('register'));$('account-save-name-btn')?.addEventListener('click',()=>chessAccountAction('save'));$('account-setup-save-btn')?.addEventListener('click',()=>chessAccountAction('save'));$('account-logout-btn')?.addEventListener('click',()=>chessAccountAction('logout'));$('account-password')?.addEventListener('keydown',e=>{if(e.key==='Enter')chessAccountAction('login')});$('account-username')?.addEventListener('keydown',e=>{if(e.key==='Enter')chessAccountAction('save')});$('account-edit-name')?.addEventListener('keydown',e=>{if(e.key==='Enter')chessAccountAction('save')});
