@@ -26,9 +26,43 @@ function renderAdminRoomList(target) {
 }
 let siteControlEnabled = true;
 let siteControlLoaded = false;
+let siteCloseTimer = null;
+let maintenanceWarningTimer = null;
+let maintenanceNoticeKey = '';
+function showMaintenanceNotice(key) {
+  if (maintenanceNoticeKey === key || document.getElementById('maintenance-warning-dialog')) return;
+  maintenanceNoticeKey = key;
+  const style = document.createElement('style');
+  style.textContent = '#maintenance-warning-dialog{position:fixed;inset:0;z-index:100001;background:#000b;display:flex;align-items:center;justify-content:center;padding:18px;box-sizing:border-box}#maintenance-warning-dialog .maintenance-warning-card{width:min(520px,100%);background:#171717;color:#fff;border:2px solid #e5b93f;border-radius:18px;padding:24px;box-shadow:0 18px 70px #0009;text-align:center}#maintenance-warning-dialog h2{margin:0 0 14px;color:#ffd54f;font-size:clamp(22px,5vw,30px)}#maintenance-warning-dialog p{font-size:clamp(17px,3.8vw,21px);line-height:1.7;margin:0 0 20px}#maintenance-warning-dialog button{border:0;border-radius:10px;padding:12px 22px;background:#ffd54f;color:#241b00;font-weight:800;font-size:16px;cursor:pointer}';
+  document.head.appendChild(style);
+  const dialog = document.createElement('div');
+  dialog.id = 'maintenance-warning-dialog';
+  dialog.setAttribute('role','alertdialog');
+  dialog.setAttribute('aria-modal','true');
+  dialog.innerHTML = '<div class="maintenance-warning-card"><h2>⚠️ 系統維護提醒</h2><p>即將關閉系統進行維護更新 你的棋盤將不被儲存:)</p><button type="button" id="maintenance-warning-ok">我知道了</button></div>';
+  document.body.appendChild(dialog);
+  document.getElementById('maintenance-warning-ok').addEventListener('click', () => dialog.remove());
+}
+function scheduleMaintenanceNotice(control) {
+  if (maintenanceWarningTimer) { clearTimeout(maintenanceWarningTimer); maintenanceWarningTimer = null; }
+  const closeAt = Number(control.autoCloseAt || 0);
+  if (control.playEnabled === false) {
+    showMaintenanceNotice(`manual-${control.updatedAt || 'closed'}`);
+    return;
+  }
+  if (closeAt > 0 && closeAt > Date.now()) {
+    const key = `scheduled-${closeAt}`;
+    maintenanceWarningTimer = setTimeout(() => showMaintenanceNotice(key), Math.max(0, closeAt - Date.now() - 60000));
+  }
+}
 function applySiteControl(control = {}) {
-  window.__xiangqiPlayEnabled = control.playEnabled !== false;
-  siteControlEnabled = control.playEnabled !== false;
+  if (siteCloseTimer) { clearTimeout(siteCloseTimer); siteCloseTimer = null; }
+  scheduleMaintenanceNotice(control);
+  const closeAt = Number(control.autoCloseAt || 0);
+  const autoClosed = closeAt > 0 && Date.now() >= closeAt;
+  siteControlEnabled = control.playEnabled !== false && !autoClosed;
+  window.__xiangqiPlayEnabled = siteControlEnabled;
+  if (closeAt > Date.now()) siteCloseTimer = setTimeout(() => applySiteControl(control), Math.min(closeAt - Date.now() + 50, 2147483000));
   siteControlLoaded = true;
   const announcement = $('site-announcement');
   const announcementText = String(control.announcement || '').trim();
