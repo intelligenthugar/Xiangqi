@@ -378,7 +378,7 @@ async function loadAccountMatches(uid) {
     list.innerHTML = matches.slice(0, 12).map(m => {
       const result = m.result === 'win' ? '勝利' : m.result === 'loss' ? '失敗' : '平手';
       const resultClass = m.result === 'win' ? 'match-win' : m.result === 'loss' ? 'match-loss' : 'match-draw';
-      const mode = m.mode === 'online' ? '多人連線' : m.mode === 'pvp' ? '單機雙人' : `單機 AI${m.aiLevel ? `（${m.aiLevel === 'easy' ? '初級' : '高級'}）` : ''}`;
+      const mode = m.mode === 'online' ? '多人連線' : m.mode === 'pvp' ? '單機雙人' : `單機 AI${m.aiLevel ? `（${m.aiLevel === 'easy' ? '初級' : m.aiLevel === 'medium' ? '中級' : '高級'}）` : ''}`;
       const date = Number(m.finishedAt) > 0 ? new Date(Number(m.finishedAt)).toLocaleString('zh-TW') : '時間未知';
       return `<article class="account-match-row"><div><strong>${escapeHtml(mode)}</strong><span class="muted small">${escapeHtml(date)} · ${Number(m.moveCount || 0)} 步</span>${m.opponentName ? `<span class="muted small">對手：${escapeHtml(m.opponentName)}</span>` : ''}</div><b class="${resultClass}">${result}</b></article>`;
     }).join('');
