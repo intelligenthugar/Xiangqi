@@ -216,6 +216,21 @@ async function joinRoom(){
   finally{if(!roomCode){btn.disabled=false;btn.textContent='加入房間';}}
 }
 
+function exitRoomLocally(message='已離開房間。'){
+  if(roomNoticeUnsubscribe){roomNoticeUnsubscribe();roomNoticeUnsubscribe=null;}
+  if(roomUnsubscribe){roomUnsubscribe();roomUnsubscribe=null;}
+  if(publicRoomsUnsubscribe){publicRoomsUnsubscribe();publicRoomsUnsubscribe=null;}
+  localStorage.removeItem('xiangqi-active-room');
+  roomCode=null;myColor=null;onlineReady=false;
+  $('room-info').hidden=true;
+  $('create-room-btn').disabled=false;$('create-room-btn').textContent='建立房間';
+  $('join-room-btn').disabled=false;$('join-room-btn').textContent='加入房間';
+  $('room-code-input').disabled=false;$('room-code-input').value='';$('room-password-input').value='';
+  $('room-role').textContent='';$('room-waiting').textContent='';
+  $('online-status').textContent=message;
+  setStatus(message);
+}
+
 async function leaveRoom(){
   if(!roomCode||!db||!user){
     $('room-info').hidden=true;
@@ -249,19 +264,8 @@ async function leaveRoom(){
 
     if(room?.settings?.visibility==='public') await remove(ref(db,`publicRooms/${code}`));
     if(roomSnap.exists()) await remove(roomRef);
-    if(roomNoticeUnsubscribe){roomNoticeUnsubscribe();roomNoticeUnsubscribe=null;}
-    if(roomUnsubscribe){roomUnsubscribe();roomUnsubscribe=null;}
-    if(publicRoomsUnsubscribe){publicRoomsUnsubscribe();publicRoomsUnsubscribe=null;}
-
-    localStorage.removeItem('xiangqi-active-room');
-    roomCode=null;myColor=null;onlineReady=false;onlineMode=true;
-    $('room-info').hidden=true;
-    $('create-room-btn').disabled=false;$('create-room-btn').textContent='建立房間';
-    $('join-room-btn').disabled=false;$('join-room-btn').textContent='加入房間';
-    $('room-code-input').disabled=false;$('room-code-input').value='';$('room-password-input').value='';
-    $('room-role').textContent='';$('room-waiting').textContent='';
-    $('online-status').textContent='已離開房間，可以建立新房間或加入其他房間。';
-    setStatus('已離開房間，對方已收到離開通知。');
+    exitRoomLocally('你已離開房間，本局已結束。');
+    onlineMode=true;
   }catch(e){
     console.error('離開房間失敗',e);
     showRoomAlert('離開房間失敗',`${explainFirebaseError(e,'離開房間')}\n請確認 Firebase Rules 已更新並發布。`);
@@ -281,7 +285,7 @@ function enterRoom(code){
   if(roomUnsubscribe)roomUnsubscribe();
   roomUnsubscribe=onValue(ref(db,`rooms/${code}`),snap=>{
     const room=snap.val();
-    if(!room){setStatus('房間已不存在');onlineReady=false;localStorage.removeItem('xiangqi-active-room');return;}
+    if(!room){exitRoomLocally('房間已結束或不存在，已返回連線大廳。');onlineMode=true;return;}
     if(room.players?.red===user.uid)myColor='red';
     else if(room.players?.black===user.uid)myColor='black';
     else{setStatus('你不是此房間的玩家');onlineReady=false;return;}
@@ -329,9 +333,11 @@ function enterRoom(code){
     lastRoomNoticeId=notice.id||'';
     if(notice.type==='player-left'){
       const name=notice.senderName||'對手';
-      $('room-waiting').textContent=`${name} 已離開房間，本局即將結束。`;
-      setStatus(`${name} 已離開房間。`);
-      window.alert(`對手已離開房間\n\n${name} 已離開，本局已結束。`);
+      window.alert(`對手已離開房間\n\n${name} 已離開，本局結束。你將返回連線大廳。`);
+      exitRoomLocally(`${name} 已離開，本局結束。你已返回連線大廳。`);
+      onlineMode=true;
+      chessGameOver=true;chessSelectedIdx=-1;chessValidMoves=[];chessDangerMoves=[];
+      renderBoard();
     }
   },error=>console.warn('房間通知讀取失敗',error));
 
