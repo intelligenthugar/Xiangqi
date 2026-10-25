@@ -1,7 +1,7 @@
 <!DOCTYPE html>
-<html lang="zh-TW"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"><title>中國象棋</title><link rel="stylesheet" href="css/style.css?v=20261025-tutorial-v8"></head>
+<html lang="zh-TW"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"><title>中國象棋</title><link rel="stylesheet" href="css/style.css?v=20261025-wakelock-v11"></head>
 <body class="dark-mode">
-<header class="topbar game-topbar"><a class="btn-home button-link" href="index.html">🏠 首頁</a><strong id="header-title">🪨 中國象棋（傳統大棋盤）</strong><div class="top-actions"><button class="btn-theme" id="theme-btn" type="button">☀️ 淺色</button></div></header>
+<header class="topbar game-topbar"><a class="btn-home button-link" href="index.html">🏠 首頁</a><strong id="header-title">🪨 中國象棋（傳統大棋盤）</strong><div class="top-actions"><button class="secondary-btn" id="screen-awake-btn" type="button" aria-pressed="false">🔆 保持螢幕常亮</button><button class="btn-theme" id="theme-btn" type="button">☀️ 淺色</button></div></header>
 <main class="game-view">
 <section id="online-panel" class="online-panel" hidden>
   <h2>🌐 多人連線</h2><p id="online-status" role="status" aria-live="polite">正在連接 Firebase…</p><p class="small muted">建立房間後，把顯示的 6 碼代碼傳給朋友；對方輸入代碼後即可加入。</p>
@@ -46,5 +46,27 @@
   });
 })();
 </script>
-<script type="module" src="js/chess.js?v=20261025-tutorial-v8"></script>
+<script>
+(function(){
+  const button=document.getElementById('screen-awake-btn');
+  if(!button)return;
+  let sentinel=null, enabled=false;
+  function paint(){button.textContent=enabled?(sentinel?'☀️ 常亮中':'⏳ 正在啟用常亮…'):'🔆 保持螢幕常亮';button.setAttribute('aria-pressed',String(enabled));}
+  async function acquire(){
+    if(!enabled||!('wakeLock' in navigator))return;
+    try{if(sentinel)await sentinel.release().catch(()=>{});sentinel=await navigator.wakeLock.request('screen');sentinel.addEventListener('release',()=>{sentinel=null;paint();});paint();}
+    catch(e){sentinel=null;paint();button.title='瀏覽器目前無法保持螢幕常亮，請保持頁面在前景並確認瀏覽器支援此功能。';}
+  }
+  button.addEventListener('click',async()=>{
+    if(!('wakeLock' in navigator)){window.alert('目前瀏覽器不支援螢幕常亮功能。請使用最新版 Chrome 或 Edge，並透過 HTTPS 開啟網站。');return;}
+    enabled=!enabled;
+    if(!enabled){if(sentinel){const old=sentinel;sentinel=null;try{await old.release();}catch(_){}}paint();return;}
+    paint();await acquire();
+    if(!sentinel){enabled=false;paint();window.alert('無法啟用螢幕常亮。請確認網站以 HTTPS 開啟，且頁面目前在前景。');}
+  });
+  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&enabled&&!sentinel)acquire();});
+  paint();
+})();
+</script>
+<script type="module" src="js/chess.js?v=20261025-wakelock-v11"></script>
 </body></html>
