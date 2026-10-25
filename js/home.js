@@ -1,9 +1,25 @@
 import { firebaseConfig } from './firebase-config.js';
-const testBypass = new URLSearchParams(location.search).get('key') === 'ji32k7au4a83';
-// 測試網址跨頁保留 key，包含 ?mode=online、房號等其他參數。
-function preserveTestKey(root=document){ if(!testBypass)return; root.querySelectorAll?.('a[href]').forEach(a=>{try{const u=new URL(a.href,location.href);if(u.origin===location.origin && !u.searchParams.has('key')){u.searchParams.set('key','ji32k7au4a83');a.href=u.href;}}catch{}}); }
-preserveTestKey(); new MutationObserver(ms=>ms.forEach(m=>m.addedNodes.forEach(n=>{if(n.nodeType===1){preserveTestKey(n);if(n.matches?.('a[href]'))preserveTestKey(n.parentNode||document)}}))).observe(document.documentElement,{childList:true,subtree:true});
-document.addEventListener('click',e=>{if(!testBypass)return;const a=e.target.closest?.('a[href]');if(!a)return;try{const u=new URL(a.href,location.href);if(u.origin===location.origin&&!u.searchParams.has('key')){u.searchParams.set('key','ji32k7au4a83');a.href=u.href;}}catch{}},true);
+const TEST_KEY = 'ji32k7au4a83';
+const ADMIN_UID = '7PHHdOC8IWYNqbGqaajq8j8DK822';
+const testKeyRequested = new URLSearchParams(location.search).get('key') === TEST_KEY;
+let testBypass = false;
+function removeTestKeyFromUrl(){const u=new URL(location.href);u.searchParams.delete('key');history.replaceState(history.state,'',u.pathname+u.search+u.hash);}
+async function authorizeTestMode(){
+  if(!testKeyRequested)return;
+  try{
+    const [appMod,authMod]=await Promise.all([import('https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js'),import('https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js')]);
+    const app=appMod.getApps().find(a=>a.name==='xiangqi-player-accounts')||appMod.initializeApp(firebaseConfig,'xiangqi-player-accounts');
+    const auth=authMod.getAuth(app); let stop;
+    const user=await new Promise(resolve=>{stop=authMod.onAuthStateChanged(auth,u=>{stop?.();resolve(u);});});
+    if(user&&!user.isAnonymous&&user.uid===ADMIN_UID){
+      testBypass=true;
+      function preserveTestKey(root=document){root.querySelectorAll?.('a[href]').forEach(a=>{try{const u=new URL(a.href,location.href);if(u.origin===location.origin&&!u.searchParams.has('key')){u.searchParams.set('key',TEST_KEY);a.href=u.href;}}catch{}});}
+      preserveTestKey();
+      new MutationObserver(ms=>ms.forEach(m=>m.addedNodes.forEach(n=>{if(n.nodeType===1){preserveTestKey(n);if(n.matches?.('a[href]'))preserveTestKey(n.parentNode||document);}}))).observe(document.documentElement,{childList:true,subtree:true});
+      document.addEventListener('click',e=>{const a=e.target.closest?.('a[href]');if(a)preserveTestKey(a.parentNode||document);},true);
+    }else removeTestKeyFromUrl();
+  }catch(e){console.warn('測試模式管理員驗證失敗',e);removeTestKeyFromUrl();}
+}
 const $ = id => document.getElementById(id);
 let db = null, api = null, roomsCache = [], allRoomsCache = [], roomsListenerStarted = false;
 try { const savedRoom = JSON.parse(localStorage.getItem('xiangqi-active-room') || 'null'); if (savedRoom?.code) { $('resume-room-container').hidden = false; $('resume-room-link').href = `chess.html?mode=online&room=${encodeURIComponent(savedRoom.code)}`; $('resume-room-link').textContent = `恢復房間 ${savedRoom.code}`; } } catch {}
@@ -40,6 +56,16 @@ function renderTopStatus(control = latestSiteControl) {
   const label = $('site-announcement-label');
   const text = $('site-announcement-text');
   if (!banner || !label || !text) return;
+
+  // 測試通行碼模式優先顯示專用公告，不被維護倒數或一般公告覆蓋。
+  if (testBypass) {
+    banner.classList.remove('is-countdown');
+    label.textContent = '🧪 測試模式';
+    text.textContent = '測試模式已啟用：維護期間仍可進入遊戲。';
+    banner.hidden = false;
+    document.body.classList.add('has-site-announcement');
+    return;
+  }
 
   const closeAt = Number(control.autoCloseAt || 0);
   const remaining = closeAt - Date.now();
@@ -94,14 +120,14 @@ function showMaintenanceNotice(key) {
 function scheduleMaintenanceNotice(control) {
   if (maintenanceWarningTimer) { clearTimeout(maintenanceWarningTimer); maintenanceWarningTimer = null; }
   const closeAt = Number(control.autoCloseAt || 0);
-  if (!testBypass && control.playEnabled === false) {
-    showMaintenanceNotice(`manual-${control.updatedAt || 'closed'}`);
+  // 直接鎖定遊玩代表維護已開始，不應繼續顯示「即將關閉」倒數或提醒。
+  if (control.playEnabled === false || testBypass || !(closeAt > Date.now())) {
+    document.getElementById('maintenance-warning-dialog')?.remove();
+    maintenanceNoticeKey = '';
     return;
   }
-  if (!testBypass && closeAt > 0 && closeAt > Date.now()) {
-    const key = `scheduled-${closeAt}`;
-    maintenanceWarningTimer = setTimeout(() => showMaintenanceNotice(key), Math.max(0, closeAt - Date.now() - 60000));
-  }
+  const key = `scheduled-${closeAt}`;
+  maintenanceWarningTimer = setTimeout(() => showMaintenanceNotice(key), Math.max(0, closeAt - Date.now() - 60000));
 }
 function applySiteControl(control = {}) {
   if (siteCloseTimer) { clearTimeout(siteCloseTimer); siteCloseTimer = null; }
@@ -133,31 +159,47 @@ async function startSiteTracking() {
       import('https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js'),
       import('https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js')
     ]);
-    const app = appMod.getApps().find(a => a.name === 'xiangqi-site-tracking') || appMod.initializeApp(firebaseConfig, 'xiangqi-site-tracking');
+    // 使用帳號系統共用的 Firebase Auth：登入時以帳號 UID 記錄，未登入時才使用匿名裝置 UID。
+    const app = appMod.getApps().find(a => a.name === 'xiangqi-player-accounts') || appMod.initializeApp(firebaseConfig, 'xiangqi-player-accounts');
     const auth = authMod.getAuth(app);
     const database = dbMod.getDatabase(app);
     try { await authMod.setPersistence(auth, authMod.browserLocalPersistence); } catch {}
-    let stop;
-    const user = await new Promise(resolve => { stop = authMod.onAuthStateChanged(auth, u => { stop?.(); resolve(u); }); });
-    const currentUser = user || (await authMod.signInAnonymously(auth)).user;
-    const uid = currentUser.uid;
-    const controlRef = dbMod.ref(database, 'siteControl');
-    dbMod.onValue(controlRef, snap => applySiteControl(snap.val() || {playEnabled:true,announcement:''}), error => {
+    dbMod.onValue(dbMod.ref(database, 'siteControl'), snap => applySiteControl(snap.val() || {playEnabled:true,announcement:''}), error => {
       console.warn('網站設定讀取失敗', error);
       applySiteControl({playEnabled:true,announcement:''});
       if ($('public-rooms-status')) $('public-rooms-status').textContent = '無法讀取網站公告／開放狀態；請確認 Firebase Rules。';
     });
-    const currentRef = dbMod.ref(database, `siteVisitors/current/${uid}`);
-    const historyRef = dbMod.ref(database, `siteVisitors/history/${uid}`);
-    const now = Date.now();
-    const displayName = (localStorage.getItem('xiangqi-nickname') || '訪客').replace(/[<>]/g,'').slice(0,18);
-    await dbMod.set(currentRef, {uid, name:displayName, online:true, lastSeen:dbMod.serverTimestamp(), page:'大廳'});
-    try { await dbMod.onDisconnect(currentRef).update({online:false,lastSeen:dbMod.serverTimestamp()}); } catch {}
-    await dbMod.runTransaction(historyRef, old => ({uid, name:displayName, firstSeen:old?.firstSeen || now, lastSeen:now, visits:Number(old?.visits||0)+1, lastPage:'大廳'}));
-    document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible') dbMod.update(currentRef,{online:true,lastSeen:dbMod.serverTimestamp(),page:'大廳'}).catch(()=>{});
-    });
-    setInterval(() => { if (document.visibilityState === 'visible') dbMod.update(currentRef,{online:true,lastSeen:dbMod.serverTimestamp(),page:'大廳'}).catch(()=>{}); }, 45000);
+
+    let trackedUid = '', trackedCurrentRef = null, heartbeat = null;
+    const registerVisitor = async currentUser => {
+      if (!currentUser) { try { await authMod.signInAnonymously(auth); } catch (e) { console.warn('匿名訪客初始化失敗', e); } return; }
+      const uid = currentUser.uid;
+      if (uid === trackedUid) return;
+      if (trackedCurrentRef) dbMod.update(trackedCurrentRef, {online:false,lastSeen:dbMod.serverTimestamp()}).catch(()=>{});
+      trackedUid = uid;
+      const currentRef = dbMod.ref(database, `siteVisitors/current/${uid}`);
+      const historyRef = dbMod.ref(database, `siteVisitors/history/${uid}`);
+      trackedCurrentRef = currentRef;
+      if (heartbeat) clearInterval(heartbeat);
+      let profileName = '';
+      if (!currentUser.isAnonymous) {
+        try { const profileSnap = await dbMod.get(dbMod.ref(database, `users/${uid}/profile`)); profileName = profileSnap.val()?.displayName || ''; } catch {}
+      }
+      const displayName = (profileName || localStorage.getItem('xiangqi-nickname') || (currentUser.isAnonymous ? '裝置訪客' : '已登入棋手')).replace(/[<>]/g,'').slice(0,18);
+      const visitorType = currentUser.isAnonymous ? 'device' : 'account';
+      await dbMod.set(currentRef, {uid, name:displayName, visitorType, online:true, lastSeen:dbMod.serverTimestamp(), page:'大廳'});
+      try { await dbMod.onDisconnect(currentRef).update({online:false,lastSeen:dbMod.serverTimestamp()}); } catch {}
+      const now = Date.now();
+      await dbMod.runTransaction(historyRef, old => {
+        const lastSessionAt = Number(old?.lastSessionAt || old?.lastSeen || 0);
+        const isNewVisit = !old || now - lastSessionAt >= 30 * 60 * 1000;
+        return {...(old || {}), uid, name:displayName, visitorType, firstSeen:old?.firstSeen || now, lastSeen:now, visits:Number(old?.visits||0) + (isNewVisit ? 1 : 0), lastSessionAt:isNewVisit ? now : (old?.lastSessionAt || lastSessionAt), lastPage:'大廳'};
+      });
+      const updatePresence = () => { if (document.visibilityState === 'visible' && trackedUid === uid) dbMod.update(currentRef,{name:displayName,visitorType,online:true,lastSeen:dbMod.serverTimestamp(),page:'大廳'}).catch(()=>{}); };
+      document.addEventListener('visibilitychange', updatePresence);
+      heartbeat = setInterval(updatePresence, 45000);
+    };
+    authMod.onAuthStateChanged(auth, user => { registerVisitor(user).catch(e => console.warn('訪客紀錄更新失敗', e)); });
   } catch (e) { console.warn('網站狀態／訪客追蹤未啟用', e); }
 }
 
@@ -220,6 +262,7 @@ $('refresh-rooms-btn')?.addEventListener('click', () => {
   }).catch(e => $('public-rooms-status').textContent = `讀取失敗：${e.message||e}`);
 });
 
+await authorizeTestMode();
 initRooms();
 startSiteTracking();
 

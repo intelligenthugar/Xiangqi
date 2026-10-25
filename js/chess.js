@@ -485,7 +485,7 @@ async function copyText(text){
   if(navigator.clipboard&&window.isSecureContext){await navigator.clipboard.writeText(text);return true;}
   const area=document.createElement('textarea');area.value=text;area.style.position='fixed';area.style.opacity='0';document.body.appendChild(area);area.select();const ok=document.execCommand('copy');area.remove();if(!ok)throw new Error('瀏覽器不允許自動複製');return true;
 }
-function makeInviteUrl(code){const url=new URL(location.href);url.search='';url.hash='';url.searchParams.set('mode','online');url.searchParams.set('room',code);return url.href;}
+function makeInviteUrl(code){const current=new URL(location.href);const testKey=current.searchParams.get('key');const url=new URL(location.href);url.search='';url.hash='';url.searchParams.set('mode','online');url.searchParams.set('room',code);if(testKey==='ji32k7au4a83')url.searchParams.set('key',testKey);return url.href;}
 function attemptAutoJoinInvite(){
   if(!onlineMode||!inviteRoomCode||autoJoinAttempted||!user||!db)return;
   autoJoinAttempted=true;
