@@ -32,8 +32,8 @@ function applySiteControl(control = {}) {
   siteControlLoaded = true;
   const announcement = $('site-announcement');
   const announcementText = String(control.announcement || '').trim();
-  if (announcement && announcementText) { $('site-announcement-text').textContent = announcementText; announcement.hidden = false; }
-  else if (announcement) announcement.hidden = true;
+  if (announcement && announcementText) { $('site-announcement-text').textContent = announcementText; announcement.hidden = false; document.body.classList.add('has-site-announcement'); }
+  else if (announcement) { announcement.hidden = true; document.body.classList.remove('has-site-announcement'); }
   const maintenance = $('site-maintenance-banner');
   if (maintenance) { maintenance.hidden = siteControlEnabled; if (control.maintenanceMessage) $('site-maintenance-message').textContent = control.maintenanceMessage; }
   document.querySelectorAll('a.mode-card, #resume-room-link, .room-join-link').forEach(link => {
