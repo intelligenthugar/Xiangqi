@@ -3,11 +3,24 @@
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#121212"><title>中國象棋｜多人連線大廳</title>
-<link rel="stylesheet" href="css/style.css?v=20261025-admin-control-v17">
+<link rel="stylesheet" href="css/style.css?v=20261025-admin-control-v18">
 </head>
-<body class="dark-mode home-page">
-<section id="site-announcement" class="site-announcement" hidden aria-live="polite"><strong>📢 公告</strong><p id="site-announcement-text"></p></section>
+<body class="dark-mode home-page site-pages">
 <header class="topbar"><h1>🪨 中國象棋</h1><div class="top-actions"><button class="secondary-btn" id="screen-awake-btn" type="button" aria-pressed="false">🔆 保持螢幕常亮</button><button class="btn-theme" id="theme-btn" type="button">☀️ 淺色</button></div></header>
+<section id="site-announcement" class="site-announcement" hidden aria-live="polite"><strong>📢 公告</strong><p class="site-announcement-track"><span id="site-announcement-text"></span></p></section>
+<script>
+(function(){
+  const header=document.querySelector('.topbar');
+  if(!header)return;
+  const updateHeaderHeight=()=>{
+    const height=Math.ceil(header.getBoundingClientRect().height);
+    document.documentElement.style.setProperty('--site-header-height',height+'px');
+  };
+  updateHeaderHeight();
+  if('ResizeObserver' in window)new ResizeObserver(updateHeaderHeight).observe(header);
+  window.addEventListener('resize',updateHeaderHeight,{passive:true});
+})();
+</script>
 <main class="lobby">
   <section id="site-maintenance-banner" class="site-maintenance-banner" hidden role="status"><strong>⛔ 網站暫停遊玩</strong><p id="site-maintenance-message">管理員目前暫停了遊戲，請稍後再來。</p></section>
   <p class="eyebrow">中國象棋 · 傳統棋藝</p><h2 id="lobby-title">選擇你的對弈方式</h2><p class="muted" id="lobby-subtitle">保留傳統棋盤風格，與 AI 或朋友一決勝負。</p>
@@ -94,5 +107,5 @@
   document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&enabled&&!sentinel)acquire();});paint();
 })();
 </script>
-<script type="module" src="js/home.js?v=20261025-admin-control-v17"></script>
+<script type="module" src="js/home.js?v=20261025-admin-control-v18"></script>
 </body></html>
