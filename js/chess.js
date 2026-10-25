@@ -2,7 +2,7 @@ import { firebaseConfig } from './firebase-config.js';
 
 const $=id=>document.getElementById(id);const params=new URLSearchParams(location.search);let onlineMode=params.get('mode')==='online';let inviteRoomCode=(params.get('room')||'').trim().toUpperCase();let autoJoinAttempted=false;
 let app=null,auth=null,db=null,user=null,roomCode=null,myColor=null,roomUnsubscribe=null,onlineReady=false,applyingRemote=false;
-let firebaseApi=null,publicRoomsUnsubscribe=null,roomNoticeUnsubscribe=null,onlinePublicRoomsCache=[],lastRoomNoticeId='',lastSeenMoveCount=-1,rematchResetStarted=false,rematchPromptOpen=false;
+let firebaseApi=null,publicRoomsUnsubscribe=null,roomNoticeUnsubscribe=null,onlinePublicRoomsCache=[],lastRoomNoticeId='',lastSeenMoveCount=-1,rematchResetStarted=false,rematchPromptOpen=false,opponentDisconnectTimer=null,disconnectHandledRoom='';
 let currentPlayerNames={red:'紅方',black:'黑方'};
 let chessPieces=[],chessSelectedIdx=-1,chessValidMoves=[],chessDangerMoves=[],chessTurn='red',chessGameMode='pve',currentAiLevel='hard',chessGameOver=false,isTossingCoin=false,isBannerDismissed=false,lastMove=null,moveHistory=[];
 let chessStats=JSON.parse(localStorage.getItem('chess_ai_stats')||'null')||{wins:0,losses:0,draws:0};const pieceValues={'帥':10000,'將':10000,'俥':90,'車':90,'炮':45,'包':45,'傌':40,'馬':40,'相':20,'象':20,'仕':20,'士':20,'兵':10,'卒':10};
@@ -34,7 +34,8 @@ function configureFinishedModal(mode='finished'){
   else if(mode==='waiting')$('rematch-status').textContent='已送出再玩一局的邀請，正在等待對方回覆…';
   else if(online)$('rematch-status').textContent='要再玩一局嗎？若任何一方不繼續，房間就會關閉。';
 }
-function finishGame(winner,reason){chessGameOver=true;$('check-banner').classList.remove('show');$('winner-message').textContent=winnerMessage(winner);$('winner-reason').textContent=reason;if(!onlineMode&&chessGameMode==='pve'){if(winner==='red')chessStats.wins++;else chessStats.losses++;updateStats()}configureFinishedModal('finished');showModal('win-modal');if(onlineMode&&roomCode)update(ref(db,`rooms/${roomCode}`),{status:'finished',winner,reason,winnerName:getSideName(winner),loserName:getSideName(winner==='red'?'black':'red'),board:chessPieces,turn:chessTurn}).catch(console.error)}
+function setResultStamp(isWinner){const stamp=$('result-stamp');if(!stamp)return;stamp.textContent=isWinner?'勝':'敗';stamp.classList.toggle('stamp-win',isWinner);stamp.classList.toggle('stamp-loss',!isWinner);stamp.hidden=false}
+function finishGame(winner,reason){chessGameOver=true;$('check-banner').classList.remove('show');setResultStamp(!onlineMode?(winner==='red'||(chessGameMode==='pvp'&&winner==='black')):winner===myColor);$('winner-message').textContent=winnerMessage(winner);$('winner-reason').textContent=reason;if(!onlineMode&&chessGameMode==='pve'){if(winner==='red')chessStats.wins++;else chessStats.losses++;updateStats()}configureFinishedModal('finished');showModal('win-modal');if(onlineMode&&roomCode)update(ref(db,`rooms/${roomCode}`),{status:'finished',winner,reason,winnerName:getSideName(winner),loserName:getSideName(winner==='red'?'black':'red'),board:chessPieces,turn:chessTurn}).catch(console.error)}
 async function publishRoomNotice(type,extra={}){
   if(!roomCode||!db||!user)throw new Error('目前沒有有效的連線房間');
   const code=roomCode;
@@ -62,7 +63,7 @@ async function resetRoomForRematch(){
     await update(ref(db,`rooms/${code}`),{status:'playing',winner:null,reason:null,winnerName:null,loserName:null,board:initialBoard(),turn:'red',lastMove:null,moveCount:0});
     await set(ref(db,`roomNotices/${code}`),{id:`${user.uid}_rematch-started_${Date.now()}`,type:'rematch-started',senderUid:user.uid,createdAt:Date.now()});
     chessPieces=initialBoard();chessTurn='red';chessGameOver=false;chessSelectedIdx=-1;chessValidMoves=[];chessDangerMoves=[];lastMove=null;moveHistory=[];isBannerDismissed=false;lastSeenMoveCount=0;
-    hideModal('win-modal');renderBoard();updateStatus();$('room-waiting').textContent='新的一局開始！';
+    hideModal('win-modal');$('result-stamp').hidden=true;$('result-stamp').classList.remove('stamp-win','stamp-loss');renderBoard();updateStatus();$('room-waiting').textContent='新的一局開始！';
   }catch(e){rematchResetStarted=false;throw e}
 }
 async function declineRematch(){
@@ -278,6 +279,7 @@ async function joinRoom(){
 }
 
 function exitRoomLocally(message='已離開房間。'){
+  if(opponentDisconnectTimer){clearTimeout(opponentDisconnectTimer);opponentDisconnectTimer=null;}
   if(roomNoticeUnsubscribe){roomNoticeUnsubscribe();roomNoticeUnsubscribe=null;}
   if(roomUnsubscribe){roomUnsubscribe();roomUnsubscribe=null;}
   if(publicRoomsUnsubscribe){publicRoomsUnsubscribe();publicRoomsUnsubscribe=null;}
@@ -300,41 +302,55 @@ async function leaveRoom(){
   }
 
   const code=roomCode;
-  if(!window.confirm('確定離開這個房間？系統會通知另一位玩家，並結束本局。'))return;
+  const roomRef=ref(db,`rooms/${code}`);
+  let roomSnap;
+  try{roomSnap=await get(roomRef);}catch(e){showRoomAlert('離開房間失敗',explainFirebaseError(e,'讀取房間'));return;}
+  const room=roomSnap.val();
+  if(!roomSnap.exists()){
+    exitRoomLocally('房間已結束，已返回連線大廳。');onlineMode=true;return;
+  }
+  const moveCount=Number(room.moveCount||0);
+  const formalGame=room.status==='playing'&&moveCount>5;
+  const prompt=formalGame
+    ? `目前已走 ${moveCount} 步。確定離開嗎？離開將直接判定你認輸，對手獲勝。`
+    : `目前已走 ${moveCount} 步（未超過 5 步）。確定離開房間？這次不會判定勝負。`;
+  if(!window.confirm(prompt))return;
 
   const btn=$('leave-room-btn');
-  if(btn){btn.disabled=true;btn.textContent='正在通知對方…';}
-
+  if(btn){btn.disabled=true;btn.textContent='正在處理離開…';}
   try{
-    const roomRef=ref(db,`rooms/${code}`);
-    const roomSnap=await get(roomRef);
-    const room=roomSnap.val();
-
-    if(roomSnap.exists()){
-      // 先送出獨立通知，讓對方收到即時訊息，再刪除房間。
-      await set(ref(db,`roomNotices/${code}`),{
-        id:`${user.uid}_${Date.now()}`,
-        type:'player-left',
-        senderUid:user.uid,
-        senderColor:myColor,
-        senderName:room.playerNames?.[myColor]||localStorage.getItem('xiangqi-nickname')||'對手',
-        createdAt:Date.now()
-      });
-      await new Promise(resolve=>setTimeout(resolve,1200));
+    const otherColor=myColor==='red'?'black':'red';
+    if(formalGame){
+      // 先將自己的 presence 標記為離線，再將本局結束為認輸。
+      // Firebase Rules 也會檢查離線狀態，避免任意替對手判勝。
+      await set(ref(db,`rooms/${code}/presence/${myColor}`),{online:false,lastSeen:Date.now(),uid:user.uid});
+      const winnerName=room.playerNames?.[otherColor]||(otherColor==='red'?'紅方':'黑方');
+      const loserName=room.playerNames?.[myColor]||(myColor==='red'?'紅方':'黑方');
+      await update(roomRef,{status:'finished',winner:otherColor,reason:'對手因退出遊戲而認輸，己方獲得勝利。',winnerName,loserName,finishedAt:Date.now()});
+      exitRoomLocally('你已認輸並離開房間。');onlineMode=true;
+      return;
     }
 
-    if(room?.settings?.visibility==='public') await remove(ref(db,`publicRooms/${code}`));
-    if(roomSnap.exists()) await remove(roomRef);
-    exitRoomLocally('你已離開房間，本局已結束。');
-    onlineMode=true;
+    // 前 5 步可自由離開，不判勝負；通知對方後清除尚未正式開始的對局。
+    await set(ref(db,`roomNotices/${code}`),{
+      id:`${user.uid}_${Date.now()}`,
+      type:'player-left',
+      senderUid:user.uid,
+      senderColor:myColor,
+      senderName:room.playerNames?.[myColor]||localStorage.getItem('xiangqi-nickname')||'對手',
+      createdAt:Date.now()
+    });
+    await new Promise(resolve=>setTimeout(resolve,500));
+    if(room.settings?.visibility==='public')await remove(ref(db,`publicRooms/${code}`));
+    await remove(roomRef);
+    exitRoomLocally('你已離開房間，未判定勝負。');onlineMode=true;
   }catch(e){
     console.error('離開房間失敗',e);
-    showRoomAlert('離開房間失敗',`${explainFirebaseError(e,'離開房間')}\n請確認 Firebase Rules 已更新並發布。`);
+    showRoomAlert('離開房間失敗',`${explainFirebaseError(e,'離開房間')}\n如果是權限錯誤，請確認已發布本次附上的 Firebase Rules。`);
   }finally{
     if(btn){btn.disabled=false;btn.textContent='🚪 離開房間';}
   }
 }
-
 function enterRoom(code){
   roomCode=code;saveActiveRoom(code,myColor);
   $('room-info').hidden=false;
@@ -369,6 +385,26 @@ function enterRoom(code){
     const presenceEl=$('opponent-presence');
     if(presenceEl)presenceEl.textContent=presenceText;
 
+    // 關閉網頁時 onDisconnect 會把玩家 presence 設為離線。等待 12 秒，
+    // 避免短暫斷線／重新整理時立刻判負；正式對局達 5 步才判定退出認輸。
+    if(opponentDisconnectTimer){clearTimeout(opponentDisconnectTimer);opponentDisconnectTimer=null;}
+    if(room.status==='playing'&&Number(room.moveCount||0)>5&&otherPresence?.online===false&&room.players?.[myColor]===user.uid){
+      const disconnectKey=`${code}:${otherColor}:${Number(room.moveCount||0)}`;
+      if(disconnectHandledRoom!==disconnectKey){
+        opponentDisconnectTimer=setTimeout(async()=>{
+          try{
+            const latestSnap=await get(ref(db,`rooms/${code}`));
+            const latest=latestSnap.val();
+            if(!latestSnap.exists()||latest.status!=='playing'||Number(latest.moveCount||0)<=5||latest.presence?.[otherColor]?.online!==false||latest.players?.[myColor]!==user.uid)return;
+            disconnectHandledRoom=disconnectKey;
+            const winnerName=latest.playerNames?.[myColor]||(myColor==='red'?'紅方':'黑方');
+            const loserName=latest.playerNames?.[otherColor]||(otherColor==='red'?'紅方':'黑方');
+            await update(ref(db,`rooms/${code}`),{status:'finished',winner:myColor,reason:'對手因退出遊戲而認輸，己方獲得勝利。',winnerName,loserName,finishedAt:Date.now()});
+          }catch(e){console.error('處理對手離線判負失敗',e);setStatus('對手已離線，但判定勝負失敗；請確認 Firebase Rules 已更新。');}
+        },12000);
+      }
+    }
+
     if(room.status==='waiting')$('room-waiting').textContent='等待黑方玩家加入…';
     else if(room.status==='playing')$('room-waiting').textContent='對局進行中';
     else if(room.status==='finished')$('room-waiting').textContent='本局已結束';
@@ -382,10 +418,21 @@ function enterRoom(code){
       chessGameOver=room.status==='finished';chessSelectedIdx=-1;chessValidMoves=[];chessDangerMoves=[];
       renderBoard();updateStatus();applyingRemote=false;
     }
+    if(room.status==='finished'&&opponentDisconnectTimer){clearTimeout(opponentDisconnectTimer);opponentDisconnectTimer=null;}
     if(room.status==='finished'&&room.winner&&$('win-modal').hidden){
       currentPlayerNames={red:room.playerNames?.red||'紅方',black:room.playerNames?.black||'黑方'};
-      $('winner-message').textContent=room.winnerName&&room.loserName?`${room.winnerName} 打敗了 ${room.loserName}`:winnerMessage(room.winner);
-      $('winner-reason').textContent=room.reason||'';configureFinishedModal('finished');showModal('win-modal');
+      setResultStamp(room.winner===myColor);
+      if(String(room.reason||'').includes('退出遊戲')&&room.winner===myColor){
+        $('winner-message').textContent='己方獲得勝利';
+        $('winner-reason').textContent='對手因退出遊戲而認輸。';
+      }else if(String(room.reason||'').includes('退出遊戲')&&room.winner!==myColor){
+        $('winner-message').textContent='你已認輸';
+        $('winner-reason').textContent='你因退出遊戲而被判定認輸。';
+      }else{
+        $('winner-message').textContent=room.winnerName&&room.loserName?`${room.winnerName} 打敗了 ${room.loserName}`:winnerMessage(room.winner);
+        $('winner-reason').textContent=room.reason||'';
+      }
+      configureFinishedModal('finished');showModal('win-modal');
     }
   },error=>{
     console.error('房間即時監聽失敗',error);
@@ -410,7 +457,7 @@ function enterRoom(code){
     }else if(notice.type==='rematch-declined'){
       if(notice.senderUid!==user?.uid){window.alert('對方不再繼續對局，房間即將關閉。');closeFinishedRoom(code,'對局已結束，房間已關閉。').catch(console.error);}
     }else if(notice.type==='rematch-started'){
-      chessPieces=initialBoard();chessTurn='red';chessGameOver=false;chessSelectedIdx=-1;chessValidMoves=[];chessDangerMoves=[];lastMove=null;moveHistory=[];isBannerDismissed=false;lastSeenMoveCount=0;rematchResetStarted=false;hideModal('win-modal');renderBoard();updateStatus();$('room-waiting').textContent='新的一局開始！';
+      chessPieces=initialBoard();chessTurn='red';chessGameOver=false;chessSelectedIdx=-1;chessValidMoves=[];chessDangerMoves=[];lastMove=null;moveHistory=[];isBannerDismissed=false;lastSeenMoveCount=0;rematchResetStarted=false;disconnectHandledRoom='';hideModal('win-modal');$('result-stamp').hidden=true;$('result-stamp').classList.remove('stamp-win','stamp-loss');renderBoard();updateStatus();$('room-waiting').textContent='新的一局開始！';
     }
   },error=>console.warn('房間通知讀取失敗',error));
 

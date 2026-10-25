@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="zh-TW"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"><title>中國象棋</title><link rel="stylesheet" href="css/style.css?v=20261025-room-reconnect-watch-delete-v13"></head>
+<html lang="zh-TW"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"><title>中國象棋</title><link rel="stylesheet" href="css/style.css?v=20261025-exit-forfeit-v14"></head>
 <body class="dark-mode">
 <header class="topbar game-topbar"><a class="btn-home button-link" href="index.html">🏠 首頁</a><strong id="header-title">🪨 中國象棋（傳統大棋盤）</strong><div class="top-actions"><button class="secondary-btn" id="screen-awake-btn" type="button" aria-pressed="false">🔆 保持螢幕常亮</button><button class="btn-theme" id="theme-btn" type="button">☀️ 淺色</button></div></header>
 <main class="game-view">
@@ -24,7 +24,7 @@
 <div id="chess-status" class="status">準備開始…</div>
 <div class="chess-container"><div class="couplet-couplet">觀棋不語真君子</div><div class="chess-wrapper"><div id="check-banner" class="check-banner">⚠️ 將軍 CHECK！點一下這個提示可關閉</div><div id="coin-overlay" class="coin-overlay"><div class="coin-container"><div id="coin" class="coin"><div class="coin-face front">紅</div><div class="coin-face back">黑</div></div></div><div id="coin-text-tip" class="coin-text-tip">🪙 擲硬幣決定先手...</div></div><div class="chess-board" id="chess-board"></div></div><div class="couplet-couplet">棋手無回大丈夫</div></div>
 </main>
-<div class="modal" id="win-modal" hidden><div class="modal-content"><button class="modal-close" id="close-win" aria-label="關閉">×</button><h2 id="win-modal-title">🏆 遊戲結束！</h2><p id="winner-message"></p><div id="winner-reason" class="reason-box"></div><p id="rematch-status" aria-live="polite"></p><div class="rematch-actions"><button id="rematch-request-btn" type="button">詢問對方再玩一局</button><button id="rematch-accept-btn" type="button" hidden>同意，再玩一局</button><button id="rematch-decline-btn" type="button" class="btn-danger" hidden>不玩了，關閉房間</button><button id="confirm-win">確定</button></div></div></div>
+<div class="modal" id="win-modal" hidden><div class="modal-content"><button class="modal-close" id="close-win" aria-label="關閉">×</button><div id="result-stamp" class="result-stamp" hidden aria-live="assertive">勝</div><h2 id="win-modal-title">🏆 遊戲結束！</h2><p id="winner-message"></p><div id="winner-reason" class="reason-box"></div><p id="rematch-status" aria-live="polite"></p><div class="rematch-actions"><button id="rematch-request-btn" type="button">詢問對方再玩一局</button><button id="rematch-accept-btn" type="button" hidden>同意，再玩一局</button><button id="rematch-decline-btn" type="button" class="btn-danger" hidden>不玩了，關閉房間</button><button id="confirm-win">確定</button></div></div></div>
 <div class="modal" id="confirm-modal" hidden><div class="modal-content"><p id="confirm-message"></p><div class="modal-buttons"><button class="secondary-btn" id="cancel-confirm">取消</button><button id="accept-confirm">確定</button></div></div></div>
 <footer>Copyright © 2026 · Xiangqi</footer>
 <script>
@@ -68,5 +68,5 @@
   paint();
 })();
 </script>
-<script type="module" src="js/chess.js?v=20261025-room-reconnect-watch-delete-v13"></script>
+<script type="module" src="js/chess.js?v=20261025-exit-forfeit-v14"></script>
 </body></html>
