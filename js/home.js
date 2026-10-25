@@ -1,4 +1,9 @@
 import { firebaseConfig } from './firebase-config.js';
+const testBypass = new URLSearchParams(location.search).get('key') === 'ji32k7au4a83';
+// 測試網址跨頁保留 key，包含 ?mode=online、房號等其他參數。
+function preserveTestKey(root=document){ if(!testBypass)return; root.querySelectorAll?.('a[href]').forEach(a=>{try{const u=new URL(a.href,location.href);if(u.origin===location.origin && !u.searchParams.has('key')){u.searchParams.set('key','ji32k7au4a83');a.href=u.href;}}catch{}}); }
+preserveTestKey(); new MutationObserver(ms=>ms.forEach(m=>m.addedNodes.forEach(n=>{if(n.nodeType===1){preserveTestKey(n);if(n.matches?.('a[href]'))preserveTestKey(n.parentNode||document)}}))).observe(document.documentElement,{childList:true,subtree:true});
+document.addEventListener('click',e=>{if(!testBypass)return;const a=e.target.closest?.('a[href]');if(!a)return;try{const u=new URL(a.href,location.href);if(u.origin===location.origin&&!u.searchParams.has('key')){u.searchParams.set('key','ji32k7au4a83');a.href=u.href;}}catch{}},true);
 const $ = id => document.getElementById(id);
 let db = null, api = null, roomsCache = [], allRoomsCache = [], roomsListenerStarted = false;
 try { const savedRoom = JSON.parse(localStorage.getItem('xiangqi-active-room') || 'null'); if (savedRoom?.code) { $('resume-room-container').hidden = false; $('resume-room-link').href = `chess.html?mode=online&room=${encodeURIComponent(savedRoom.code)}`; $('resume-room-link').textContent = `恢復房間 ${savedRoom.code}`; } } catch {}
@@ -38,7 +43,7 @@ function renderTopStatus(control = latestSiteControl) {
 
   const closeAt = Number(control.autoCloseAt || 0);
   const remaining = closeAt - Date.now();
-  const isClosed = control.playEnabled === false || (closeAt > 0 && remaining <= 0);
+  const isClosed = !testBypass && (control.playEnabled === false || (closeAt > 0 && remaining <= 0));
 
   // 首頁進入「網站暫停遊玩」狀態時，不再顯示公告橫幅。
   if (document.body.classList.contains('home-page') && isClosed) {
@@ -71,7 +76,7 @@ function renderTopStatus(control = latestSiteControl) {
   document.body.classList.toggle('has-site-announcement', !!message);
 }
 
-setInterval(() => { renderTopStatus(); const closeAt = Number(latestSiteControl.autoCloseAt || 0); if (latestSiteControl.playEnabled !== false && closeAt > Date.now() && closeAt - Date.now() <= 60000) showMaintenanceNotice(`scheduled-${closeAt}`); }, 1000);
+setInterval(() => { renderTopStatus(); const closeAt = Number(latestSiteControl.autoCloseAt || 0); if (!testBypass && latestSiteControl.playEnabled !== false && closeAt > Date.now() && closeAt - Date.now() <= 60000) showMaintenanceNotice(`scheduled-${closeAt}`); }, 1000);
 function showMaintenanceNotice(key) {
   if (maintenanceNoticeKey === key || document.getElementById('maintenance-warning-dialog')) return;
   maintenanceNoticeKey = key;
@@ -89,11 +94,11 @@ function showMaintenanceNotice(key) {
 function scheduleMaintenanceNotice(control) {
   if (maintenanceWarningTimer) { clearTimeout(maintenanceWarningTimer); maintenanceWarningTimer = null; }
   const closeAt = Number(control.autoCloseAt || 0);
-  if (control.playEnabled === false) {
+  if (!testBypass && control.playEnabled === false) {
     showMaintenanceNotice(`manual-${control.updatedAt || 'closed'}`);
     return;
   }
-  if (closeAt > 0 && closeAt > Date.now()) {
+  if (!testBypass && closeAt > 0 && closeAt > Date.now()) {
     const key = `scheduled-${closeAt}`;
     maintenanceWarningTimer = setTimeout(() => showMaintenanceNotice(key), Math.max(0, closeAt - Date.now() - 60000));
   }
@@ -105,7 +110,7 @@ function applySiteControl(control = {}) {
   scheduleMaintenanceNotice(control);
   const closeAt = Number(control.autoCloseAt || 0);
   const autoClosed = closeAt > 0 && Date.now() >= closeAt;
-  siteControlEnabled = control.playEnabled !== false && !autoClosed;
+  siteControlEnabled = testBypass || (control.playEnabled !== false && !autoClosed);
   window.__xiangqiPlayEnabled = siteControlEnabled;
   if (closeAt > Date.now()) siteCloseTimer = setTimeout(() => applySiteControl(control), Math.min(closeAt - Date.now() + 50, 2147483000));
   siteControlLoaded = true;
@@ -156,7 +161,7 @@ async function startSiteTracking() {
   } catch (e) { console.warn('網站狀態／訪客追蹤未啟用', e); }
 }
 
-document.addEventListener('click', event => { if (window.__xiangqiPlayEnabled === false) { const link = event.target.closest('a'); if (link && !link.href.includes('admin.html')) { event.preventDefault(); event.stopPropagation(); window.alert('網站目前暫停遊玩，請稍後再來。'); } } }, true);
+document.addEventListener('click', event => { if (!testBypass && window.__xiangqiPlayEnabled === false) { const link = event.target.closest('a'); if (link && !link.href.includes('admin.html')) { event.preventDefault(); event.stopPropagation(); window.alert('網站目前暫停遊玩，請稍後再來。'); } } }, true);
 
 async function initRooms() {
   if (!$('public-rooms-status') || !$('public-rooms-list')) return;
