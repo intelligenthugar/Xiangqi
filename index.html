@@ -29,8 +29,8 @@
     <h2 id="admin-title">🛡️ 管理員模式（原型）</h2>
     <p class="admin-warning">安全限制：這是純前端原型，密碼會出現在 JavaScript 中，不能當成真正的管理員驗證。此介面不會提供刪除房間功能。</p>
     <div id="admin-login-area"><label for="admin-password-input">管理員密碼</label><input id="admin-password-input" type="password" autocomplete="current-password" placeholder="輸入管理員密碼"><button id="admin-login-btn" type="button">登入管理介面</button><p id="admin-login-status" class="muted small" role="status"></p></div>
-    <section id="admin-dashboard" hidden><h3>公開房間狀態</h3><p class="muted small">此原型只能列出 publicRooms 中的公開房間，無法安全地列出全部私人房間或刪除房間。</p><div id="admin-room-list" class="public-rooms-list"></div><button id="admin-refresh-btn" class="secondary-btn" type="button">重新載入列表</button></section>
+    <section id="admin-dashboard" hidden><h3>全部房間狀態（含私人房間）</h3><p class="muted small">管理員列表會列出 rooms 節點中的公開與私人房間；目前只提供查看／加入，不提供刪除。注意：為了讓靜態網站列出全部房間，已登入的匿名使用者也能讀取房間清單；此原型不適合放置敏感資料。</p><div id="admin-room-list" class="public-rooms-list"></div><button id="admin-refresh-btn" class="secondary-btn" type="button">重新載入列表</button></section>
   </div>
 </div>
-<script type="module" src="js/home.js?v=20261025-prototype-1"></script>
+<script type="module" src="js/home.js?v=20261025-notice-admin-2"></script>
 </body></html>

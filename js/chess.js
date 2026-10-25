@@ -2,7 +2,7 @@ import { firebaseConfig } from './firebase-config.js';
 
 const $=id=>document.getElementById(id);const params=new URLSearchParams(location.search);let onlineMode=params.get('mode')==='online';let inviteRoomCode=(params.get('room')||'').trim().toUpperCase();let autoJoinAttempted=false;
 let app=null,auth=null,db=null,user=null,roomCode=null,myColor=null,roomUnsubscribe=null,onlineReady=false,applyingRemote=false;
-let firebaseApi=null,publicRoomsUnsubscribe=null,onlinePublicRoomsCache=[];
+let firebaseApi=null,publicRoomsUnsubscribe=null,roomNoticeUnsubscribe=null,onlinePublicRoomsCache=[],lastRoomNoticeId='';
 let chessPieces=[],chessSelectedIdx=-1,chessValidMoves=[],chessDangerMoves=[],chessTurn='red',chessGameMode='pve',currentAiLevel='hard',chessGameOver=false,isTossingCoin=false,isBannerDismissed=false,lastMove=null,moveHistory=[];
 let chessStats=JSON.parse(localStorage.getItem('chess_ai_stats')||'null')||{wins:0,losses:0,draws:0};const pieceValues={'帥':10000,'將':10000,'俥':90,'車':90,'炮':45,'包':45,'傌':40,'馬':40,'相':20,'象':20,'仕':20,'士':20,'兵':10,'卒':10};
 function setStatus(s){$('chess-status').textContent=s}
@@ -224,44 +224,44 @@ async function leaveRoom(){
   }
 
   const code=roomCode;
-  if(!window.confirm('確定離開這個房間？房間會被刪除，另一位玩家也會離開本局。'))return;
+  if(!window.confirm('確定離開這個房間？系統會通知另一位玩家，並結束本局。'))return;
 
   const btn=$('leave-room-btn');
-  if(btn){btn.disabled=true;btn.textContent='正在離開…';}
+  if(btn){btn.disabled=true;btn.textContent='正在通知對方…';}
 
   try{
     const roomRef=ref(db,`rooms/${code}`);
     const roomSnap=await get(roomRef);
     const room=roomSnap.val();
 
-    // 先刪除公開大廳索引。若權限拒絕，就停止並顯示錯誤，避免留下半套狀態。
-    if(room?.settings?.visibility==='public'){
-      await remove(ref(db,`publicRooms/${code}`));
+    if(roomSnap.exists()){
+      // 先送出獨立通知，讓對方收到即時訊息，再刪除房間。
+      await set(ref(db,`roomNotices/${code}`),{
+        id:`${user.uid}_${Date.now()}`,
+        type:'player-left',
+        senderUid:user.uid,
+        senderColor:myColor,
+        senderName:room.playerNames?.[myColor]||localStorage.getItem('xiangqi-nickname')||'對手',
+        createdAt:Date.now()
+      });
+      await new Promise(resolve=>setTimeout(resolve,1200));
     }
 
+    if(room?.settings?.visibility==='public') await remove(ref(db,`publicRooms/${code}`));
     if(roomSnap.exists()) await remove(roomRef);
-
+    if(roomNoticeUnsubscribe){roomNoticeUnsubscribe();roomNoticeUnsubscribe=null;}
     if(roomUnsubscribe){roomUnsubscribe();roomUnsubscribe=null;}
     if(publicRoomsUnsubscribe){publicRoomsUnsubscribe();publicRoomsUnsubscribe=null;}
 
     localStorage.removeItem('xiangqi-active-room');
-    roomCode=null;
-    myColor=null;
-    onlineReady=false;
-    onlineMode=true;
-
+    roomCode=null;myColor=null;onlineReady=false;onlineMode=true;
     $('room-info').hidden=true;
-    $('create-room-btn').disabled=false;
-    $('create-room-btn').textContent='建立房間';
-    $('join-room-btn').disabled=false;
-    $('join-room-btn').textContent='加入房間';
-    $('room-code-input').disabled=false;
-    $('room-code-input').value='';
-    $('room-password-input').value='';
-    $('room-role').textContent='';
-    $('room-waiting').textContent='';
+    $('create-room-btn').disabled=false;$('create-room-btn').textContent='建立房間';
+    $('join-room-btn').disabled=false;$('join-room-btn').textContent='加入房間';
+    $('room-code-input').disabled=false;$('room-code-input').value='';$('room-password-input').value='';
+    $('room-role').textContent='';$('room-waiting').textContent='';
     $('online-status').textContent='已離開房間，可以建立新房間或加入其他房間。';
-    setStatus('已離開房間。公開列表已更新。');
+    setStatus('已離開房間，對方已收到離開通知。');
   }catch(e){
     console.error('離開房間失敗',e);
     showRoomAlert('離開房間失敗',`${explainFirebaseError(e,'離開房間')}\n請確認 Firebase Rules 已更新並發布。`);
@@ -322,6 +322,19 @@ function enterRoom(code){
     console.error('房間即時監聽失敗',error);
     setStatus(`房間同步失敗：${explainFirebaseError(error,'讀取房間')}`);
   });
+  if(roomNoticeUnsubscribe){roomNoticeUnsubscribe();roomNoticeUnsubscribe=null;}
+  roomNoticeUnsubscribe=onValue(ref(db,`roomNotices/${code}`),snap=>{
+    const notice=snap.val();
+    if(!notice||notice.senderUid===user?.uid||notice.id===lastRoomNoticeId)return;
+    lastRoomNoticeId=notice.id||'';
+    if(notice.type==='player-left'){
+      const name=notice.senderName||'對手';
+      $('room-waiting').textContent=`${name} 已離開房間，本局即將結束。`;
+      setStatus(`${name} 已離開房間。`);
+      window.alert(`對手已離開房間\n\n${name} 已離開，本局已結束。`);
+    }
+  },error=>console.warn('房間通知讀取失敗',error));
+
   // 這個原型採用「任何一位玩家斷線就結束房間」的清理方式，
   // 因此重新整理、關閉分頁或網路中斷時，Firebase 會刪除房間與公開列表索引。
   // 注意：重新整理會結束該局，不再保留跨重新整理的對局。
