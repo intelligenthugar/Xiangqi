@@ -29,6 +29,32 @@ let siteControlLoaded = false;
 let siteCloseTimer = null;
 let maintenanceWarningTimer = null;
 let maintenanceNoticeKey = '';
+let latestSiteControl = {};
+function renderTopStatus(control = latestSiteControl) {
+  const banner = $('site-announcement');
+  const label = $('site-announcement-label');
+  const text = $('site-announcement-text');
+  if (!banner || !label || !text) return;
+  const closeAt = Number(control.autoCloseAt || 0);
+  const remaining = closeAt - Date.now();
+  if (control.playEnabled !== false && closeAt > 0 && remaining > 0) {
+    const total = Math.ceil(remaining / 1000);
+    const h = Math.floor(total / 3600), m = Math.floor((total % 3600) / 60), s = total % 60;
+    label.textContent = '⏳ 維護倒數';
+    text.textContent = h > 0 ? `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}` : `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+    banner.classList.add('is-countdown');
+    banner.hidden = false;
+    document.body.classList.add('has-site-announcement');
+    return;
+  }
+  banner.classList.remove('is-countdown');
+  label.textContent = '📢 公告';
+  const message = String(control.announcement || '').trim();
+  text.textContent = message;
+  banner.hidden = !message;
+  document.body.classList.toggle('has-site-announcement', !!message);
+}
+setInterval(() => renderTopStatus(), 1000);
 function showMaintenanceNotice(key) {
   if (maintenanceNoticeKey === key || document.getElementById('maintenance-warning-dialog')) return;
   maintenanceNoticeKey = key;
@@ -57,6 +83,8 @@ function scheduleMaintenanceNotice(control) {
 }
 function applySiteControl(control = {}) {
   if (siteCloseTimer) { clearTimeout(siteCloseTimer); siteCloseTimer = null; }
+  latestSiteControl = control || {};
+  renderTopStatus(latestSiteControl);
   scheduleMaintenanceNotice(control);
   const closeAt = Number(control.autoCloseAt || 0);
   const autoClosed = closeAt > 0 && Date.now() >= closeAt;
@@ -64,10 +92,6 @@ function applySiteControl(control = {}) {
   window.__xiangqiPlayEnabled = siteControlEnabled;
   if (closeAt > Date.now()) siteCloseTimer = setTimeout(() => applySiteControl(control), Math.min(closeAt - Date.now() + 50, 2147483000));
   siteControlLoaded = true;
-  const announcement = $('site-announcement');
-  const announcementText = String(control.announcement || '').trim();
-  if (announcement && announcementText) { $('site-announcement-text').textContent = announcementText; announcement.hidden = false; document.body.classList.add('has-site-announcement'); }
-  else if (announcement) { announcement.hidden = true; document.body.classList.remove('has-site-announcement'); }
   const maintenance = $('site-maintenance-banner');
   if (maintenance) { maintenance.hidden = siteControlEnabled; if (control.maintenanceMessage) $('site-maintenance-message').textContent = control.maintenanceMessage; }
   document.querySelectorAll('a.mode-card, #resume-room-link, .room-join-link').forEach(link => {
