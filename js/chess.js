@@ -2,7 +2,7 @@ import { firebaseConfig } from './firebase-config.js';
 
 const $=id=>document.getElementById(id);const params=new URLSearchParams(location.search);let onlineMode=params.get('mode')==='online';let inviteRoomCode=(params.get('room')||'').trim().toUpperCase();let autoJoinAttempted=false;
 let app=null,auth=null,db=null,user=null,roomCode=null,myColor=null,roomUnsubscribe=null,onlineReady=false,applyingRemote=false;
-let firebaseApi=null;
+let firebaseApi=null,publicRoomsUnsubscribe=null,onlinePublicRoomsCache=[];
 let chessPieces=[],chessSelectedIdx=-1,chessValidMoves=[],chessDangerMoves=[],chessTurn='red',chessGameMode='pve',currentAiLevel='hard',chessGameOver=false,isTossingCoin=false,isBannerDismissed=false,lastMove=null,moveHistory=[];
 let chessStats=JSON.parse(localStorage.getItem('chess_ai_stats')||'null')||{wins:0,losses:0,draws:0};const pieceValues={'帥':10000,'將':10000,'俥':90,'車':90,'炮':45,'包':45,'傌':40,'馬':40,'相':20,'象':20,'仕':20,'士':20,'兵':10,'卒':10};
 function setStatus(s){$('chess-status').textContent=s}
@@ -42,6 +42,7 @@ async function connectFirebase(){
     if(existingUser) user=existingUser;
     else user=(await firebaseApi.signInAnonymously(auth)).user;
     $('online-status').textContent='Firebase 已連線（匿名玩家），可以建立或加入房間。';
+    initOnlinePublicRooms();
     if(!inviteRoomCode) await restoreSavedRoom();
     attemptAutoJoinInvite();
   }catch(e){$('online-status').textContent=`Firebase 連線失敗：${explainFirebaseError(e,'連線')}`;console.error(e)}
@@ -83,6 +84,34 @@ async function restoreSavedRoom(){
   }catch(e){console.warn('恢復房間失敗',e);return false;}
 }
 const ref=(...a)=>firebaseApi.ref(...a),get=(...a)=>firebaseApi.get(...a),set=(...a)=>firebaseApi.set(...a),update=(...a)=>firebaseApi.update(...a),onValue=(...a)=>firebaseApi.onValue(...a),runTransaction=(...a)=>firebaseApi.runTransaction(...a),onDisconnect=(...a)=>firebaseApi.onDisconnect(...a);
+
+function escapeRoomText(value){return String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function formatRoomTime(value){const n=Number(value);if(!Number.isFinite(n)||n<=0)return '時間未知';return new Date(n).toLocaleString('zh-TW',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'});}
+function renderOnlinePublicRooms(){
+  const list=$('online-public-rooms-list');if(!list)return;
+  const rooms=onlinePublicRoomsCache.filter(r=>r.status==='waiting').sort((a,b)=>Number(b.createdAt||0)-Number(a.createdAt||0));
+  if(!rooms.length){list.innerHTML='<p class="muted small">目前沒有等待中的公開房間。你可以建立公開房間，或輸入朋友提供的房號。</p>';return;}
+  list.innerHTML=rooms.map(r=>`<article class="public-room-card"><div class="public-room-main"><strong class="room-code">${escapeRoomText(r.code)}</strong><span class="room-status">等待加入</span><span class="muted small">房主：${escapeRoomText(r.hostName||'棋手')}</span><span class="muted small">建立：${escapeRoomText(formatRoomTime(r.createdAt))}</span><span class="muted small">人數：${Number(r.playersCount||1)}/2　${r.hasPassword?'🔒 需要密碼':'🔓 無密碼'}</span></div><div><button class="room-join-link online-room-join-btn" type="button" data-room-code="${escapeRoomText(r.code)}" data-room-password="${r.hasPassword?'1':'0'}">加入房間</button></div></article>`).join('');
+}
+function initOnlinePublicRooms(){
+  const status=$('online-public-rooms-status');if(!status||!db||!firebaseApi)return;
+  if(publicRoomsUnsubscribe)publicRoomsUnsubscribe();
+  status.textContent='正在讀取公開房間…';
+  publicRoomsUnsubscribe=onValue(ref(db,'publicRooms'),snap=>{
+    const value=snap.val()||{};
+    onlinePublicRoomsCache=Object.entries(value).map(([code,r])=>({...r,code:r.code||code}));
+    const waiting=onlinePublicRoomsCache.filter(r=>r.status==='waiting').length;
+    status.textContent=`公開房間 ${waiting} 間等待加入`;
+    renderOnlinePublicRooms();
+  },error=>{
+    console.error('公開房間列表讀取失敗',error);
+    status.textContent=error?.code==='PERMISSION_DENIED'||String(error?.code||'').includes('permission-denied')
+      ?'載入失敗：Permission denied。請確認 Firebase Rules 的 publicRooms「父節點」有 .read: "auth != null"，並已按 Publish。'
+      :`公開列表載入失敗：${error?.message||error}`;
+    const list=$('online-public-rooms-list');if(list)list.innerHTML='<p class="muted small">目前無法讀取公開房間；你仍可使用房號加入。</p>';
+  });
+}
+
 function explainFirebaseError(e, action){
   const code=e?.code||'';
   if(code.includes('permission-denied')) return 'Firebase 拒絕存取：請確認 Realtime Database Rules 已發布，且允許已匿名登入的玩家讀寫房間。';
@@ -266,6 +295,26 @@ function attemptAutoJoinInvite(){
   $('online-status').textContent=`正在加入房間 ${inviteRoomCode}…`;
   joinRoom();
 }
+$('online-refresh-rooms-btn')?.addEventListener('click',()=>{
+  if(!db||!firebaseApi){const st=$('online-public-rooms-status');if(st)st.textContent='Firebase 尚未連線。';return;}
+  firebaseApi.get(ref(db,'publicRooms')).then(snap=>{
+    const value=snap.val()||{};onlinePublicRoomsCache=Object.entries(value).map(([code,r])=>({...r,code:r.code||code}));
+    const st=$('online-public-rooms-status');if(st)st.textContent=`公開房間 ${onlinePublicRoomsCache.filter(r=>r.status==='waiting').length} 間等待加入`;
+    renderOnlinePublicRooms();
+  }).catch(e=>{const st=$('online-public-rooms-status');if(st)st.textContent=`載入失敗：${e?.code||e?.message||e}`;});
+});
+$('online-public-rooms-list')?.addEventListener('click',async e=>{
+  const btn=e.target.closest('.online-room-join-btn');if(!btn)return;
+  const code=btn.dataset.roomCode||'';
+  $('room-code-input').value=code;
+  if(btn.dataset.roomPassword==='1'){
+    const password=window.prompt(`房間 ${code} 需要密碼，請輸入房主提供的密碼：`);
+    if(password===null)return;
+    $('room-password-input').value=password;
+  }else $('room-password-input').value='';
+  $('online-status').textContent=`正在加入公開房間 ${code}…`;
+  await joinRoom();
+});
 $('create-room-btn').addEventListener('click',createRoom);$('join-room-btn').addEventListener('click',joinRoom);
 if($('player-nickname')){$('player-nickname').value=localStorage.getItem('xiangqi-nickname')||'';$('player-nickname').addEventListener('change',getNickname);}
 if($('room-code-input'))$('room-code-input').addEventListener('input',e=>{e.target.value=e.target.value.toUpperCase().replace(/[^A-HJ-NP-Z2-9]/g,'').slice(0,6)});

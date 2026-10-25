@@ -56,3 +56,11 @@
 @media(max-width:600px){.room-setup-grid{grid-template-columns:1fr}.room-password-label{grid-column:auto}.public-room-card{align-items:flex-start;flex-direction:column}.public-room-card>div:last-child{width:100%}.room-join-link{width:100%}.admin-fab{right:14px;bottom:14px;width:50px;height:50px}.public-lobby-panel{padding:12px}}
 
 .resume-room-container{margin:0 auto 16px;padding:14px 18px;max-width:650px;border:1px solid #4caf50;border-radius:12px;background:var(--panel-bg);display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}.resume-room-container[hidden]{display:none}.resume-room-container p{margin:0;font-weight:700}
+
+/* Public room list inside chess.html?mode=online */
+.online-public-lobby{margin:14px 0 18px;padding:14px}
+.online-public-lobby .public-lobby-heading h3{font-size:19px;margin:0 0 4px}
+.online-public-lobby .public-room-card{gap:12px}
+.online-public-lobby .public-room-main{min-width:0}
+.online-public-lobby .room-join-link{white-space:nowrap}
+@media(max-width:600px){.online-public-lobby{padding:10px}.online-public-lobby .public-room-card>div:last-child{width:100%}}
