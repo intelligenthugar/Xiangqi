@@ -3,13 +3,13 @@ import { firebaseConfig } from './firebase-config.js';
 const $=id=>document.getElementById(id);const params=new URLSearchParams(location.search);let onlineMode=params.get('mode')==='online';let inviteRoomCode=(params.get('room')||'').trim().toUpperCase();let autoJoinAttempted=false;
 let app=null,auth=null,db=null,user=null,roomCode=null,myColor=null,roomUnsubscribe=null,onlineReady=false,applyingRemote=false;
 let firebaseApi=null,publicRoomsUnsubscribe=null,roomNoticeUnsubscribe=null,onlinePublicRoomsCache=[],lastRoomNoticeId='',lastSeenMoveCount=-1,rematchResetStarted=false,rematchPromptOpen=false,opponentDisconnectTimer=null,disconnectHandledRoom='';
-let currentPlayerNames={red:'紅方',black:'黑方'};
+let currentPlayerNames={red:'紅方',black:'黑方'};let playerDisplayName='棋手',currentGameId='single_'+Date.now(),savedMatchIds=new Set();
 let chessPieces=[],chessSelectedIdx=-1,chessValidMoves=[],chessDangerMoves=[],chessTurn='red',chessGameMode='pve',currentAiLevel='hard',chessGameOver=false,isTossingCoin=false,isBannerDismissed=false,lastMove=null,moveHistory=[];
 let chessStats=JSON.parse(localStorage.getItem('chess_ai_stats')||'null')||{wins:0,losses:0,draws:0};const pieceValues={'帥':10000,'將':10000,'俥':90,'車':90,'炮':45,'包':45,'傌':40,'馬':40,'相':20,'象':20,'仕':20,'士':20,'兵':10,'卒':10};
 function setStatus(s){$('chess-status').textContent=s}
 function showModal(id){$(id).hidden=false}function hideModal(id){$(id).hidden=true}
 function initialBoard(){const b=Array(90).fill(null);const black=['車','馬','象','士','將','士','象','馬','車'];black.forEach((name,c)=>b[c]={name,color:'black',type:name});b[19]={name:'包',color:'black',type:'炮'};b[25]={name:'包',color:'black',type:'炮'};[0,2,4,6,8].forEach(c=>b[27+c]={name:'卒',color:'black',type:'卒'});[0,2,4,6,8].forEach(c=>b[54+c]={name:'兵',color:'red',type:'兵'});b[64]={name:'炮',color:'red',type:'炮'};b[70]={name:'炮',color:'red',type:'炮'};['俥','傌','相','仕','帥','仕','相','傌','俥'].forEach((name,c)=>b[81+c]={name,color:'red',type:name});return b}
-function initGame(skipCoin=false){chessGameMode=$('chess-game-mode').value;currentAiLevel=$('chess-ai-level').value;$('chess-ai-level').style.display=chessGameMode==='pve'?'inline-block':'none';$('chess-ai-score-container').style.display=chessGameMode==='pve'?'flex':'none';chessPieces=initialBoard();chessSelectedIdx=-1;chessValidMoves=[];chessDangerMoves=[];chessTurn='red';chessGameOver=false;isBannerDismissed=false;lastMove=null;moveHistory=[];updateStats();renderBoard();if(skipCoin||onlineMode){isTossingCoin=false;$('coin-overlay').style.display='none';if(onlineMode){chessTurn='red';updateStatus()}else updateStatus()}else tossCoin()}
+function initGame(skipCoin=false){currentGameId='single_'+Date.now()+'_'+Math.random().toString(36).slice(2,8);chessGameMode=$('chess-game-mode').value;currentAiLevel=$('chess-ai-level').value;$('chess-ai-level').style.display=chessGameMode==='pve'?'inline-block':'none';$('chess-ai-score-container').style.display=chessGameMode==='pve'?'flex':'none';chessPieces=initialBoard();chessSelectedIdx=-1;chessValidMoves=[];chessDangerMoves=[];chessTurn='red';chessGameOver=false;isBannerDismissed=false;lastMove=null;moveHistory=[];updateStats();renderBoard();if(skipCoin||onlineMode){isTossingCoin=false;$('coin-overlay').style.display='none';if(onlineMode){chessTurn='red';updateStatus()}else updateStatus()}else tossCoin()}
 function tossCoin(){isTossingCoin=true;$('coin-overlay').style.display='flex';$('coin-text-tip').textContent='🪙 擲硬幣決定先手...';const red=Math.random()<.5,deg=red?2160:2340;$('coin').style.transition='none';$('coin').style.transform='rotateY(0deg)';setTimeout(()=>{$('coin').style.transition='transform 1.2s cubic-bezier(.25,1,.5,1)';$('coin').style.transform=`rotateY(${deg}deg)`},50);setTimeout(()=>{$('coin-text-tip').textContent=red?'🪙 擲出「紅」！由紅方先手！':'🪙 擲出「黑」！由黑方先手！';setTimeout(()=>{$('coin-overlay').style.display='none';isTossingCoin=false;chessTurn=red?'red':'black';updateStatus();if(chessGameMode==='pve'&&chessTurn==='black')aiTurn()},900)},1250)}
 function isKingsFacing(board){let r=-1,b=-1;for(let i=0;i<90;i++){if(board[i]?.name==='帥')r=i;if(board[i]?.name==='將')b=i}if(r<0||b<0||r%9!==b%9)return false;for(let row=Math.min(Math.floor(r/9),Math.floor(b/9))+1;row<Math.max(Math.floor(r/9),Math.floor(b/9));row++)if(board[row*9+r%9])return false;return true}
 function between(from,to,board){let fr=Math.floor(from/9),fc=from%9,tr=Math.floor(to/9),tc=to%9,n=0;if(fr===tr){for(let c=Math.min(fc,tc)+1;c<Math.max(fc,tc);c++)if(board[fr*9+c])n++}else if(fc===tc){for(let r=Math.min(fr,tr)+1;r<Math.max(fr,tr);r++)if(board[r*9+fc])n++}return n}
@@ -35,7 +35,8 @@ function configureFinishedModal(mode='finished'){
   else if(online)$('rematch-status').textContent='要再玩一局嗎？若任何一方不繼續，房間就會關閉。';
 }
 function setResultStamp(isWinner){const stamp=$('result-stamp');if(!stamp)return;stamp.textContent=isWinner?'勝':'敗';stamp.classList.toggle('stamp-win',isWinner);stamp.classList.toggle('stamp-loss',!isWinner);stamp.hidden=false}
-function finishGame(winner,reason){chessGameOver=true;$('check-banner').classList.remove('show');setResultStamp(!onlineMode?(winner==='red'||(chessGameMode==='pvp'&&winner==='black')):winner===myColor);$('winner-message').textContent=winnerMessage(winner);$('winner-reason').textContent=reason;if(!onlineMode&&chessGameMode==='pve'){if(winner==='red')chessStats.wins++;else chessStats.losses++;updateStats()}configureFinishedModal('finished');showModal('win-modal');if(onlineMode&&roomCode)update(ref(db,`rooms/${roomCode}`),{status:'finished',winner,reason,winnerName:getSideName(winner),loserName:getSideName(winner==='red'?'black':'red'),board:chessPieces,turn:chessTurn}).catch(console.error)}
+async function savePlayerMatch(match){try{if(!user||user.isAnonymous||!db||!firebaseApi||!match?.matchId||savedMatchIds.has(match.matchId))return;savedMatchIds.add(match.matchId);const profileSnap=await get(ref(db,`users/${user.uid}/profile`));const profile=profileSnap.val()||{};if(!profile.displayName){savedMatchIds.delete(match.matchId);return}const data={id:match.matchId,mode:match.mode,result:match.result,reason:String(match.reason||'').slice(0,160),finishedAt:Number(match.finishedAt||Date.now()),moveCount:Number(match.moveCount||0),aiLevel:match.aiLevel||null,opponentName:String(match.opponentName||'').slice(0,30),roomCode:match.roomCode||null,displayName:profile.displayName};await set(ref(db,`users/${user.uid}/matches/${match.matchId.replace(/[^A-Za-z0-9_-]/g,'_')}`),data);}catch(e){savedMatchIds.delete(match.matchId);console.warn('對戰紀錄儲存失敗，請確認 Firebase Rules 已允許本人寫入 users/{uid}/matches',e)}}
+function finishGame(winner,reason){chessGameOver=true;$('check-banner').classList.remove('show');setResultStamp(!onlineMode?(winner==='red'||(chessGameMode==='pvp'&&winner==='black')):winner===myColor);$('winner-message').textContent=winnerMessage(winner);$('winner-reason').textContent=reason;if(!onlineMode&&chessGameMode==='pve'){if(winner==='red')chessStats.wins++;else chessStats.losses++;updateStats()}configureFinishedModal('finished');showModal('win-modal');if(onlineMode&&roomCode){const finishedAt=Date.now();update(ref(db,`rooms/${roomCode}`),{status:'finished',winner,reason,winnerName:getSideName(winner),loserName:getSideName(winner==='red'?'black':'red'),board:chessPieces,turn:chessTurn,finishedAt}).catch(console.error)}else{savePlayerMatch({matchId:currentGameId,mode:chessGameMode==='pve'?'pve':'pvp',result:chessGameMode==='pvp'?'draw':(winner==='red'?'win':'loss'),winner,reason,finishedAt:Date.now(),moveCount:moveHistory.length,aiLevel:currentAiLevel,opponentName:chessGameMode==='pve'?'AI':'本機雙人'});}}
 async function publishRoomNotice(type,extra={}){
   if(!roomCode||!db||!user)throw new Error('目前沒有有效的連線房間');
   const code=roomCode;
@@ -62,7 +63,7 @@ async function resetRoomForRematch(){
     if(room.players?.[room.turn]!==user.uid){rematchResetStarted=false;return}
     await update(ref(db,`rooms/${code}`),{status:'playing',winner:null,reason:null,winnerName:null,loserName:null,board:initialBoard(),turn:'red',lastMove:null,moveCount:0});
     await set(ref(db,`roomNotices/${code}`),{id:`${user.uid}_rematch-started_${Date.now()}`,type:'rematch-started',senderUid:user.uid,createdAt:Date.now()});
-    chessPieces=initialBoard();chessTurn='red';chessGameOver=false;chessSelectedIdx=-1;chessValidMoves=[];chessDangerMoves=[];lastMove=null;moveHistory=[];isBannerDismissed=false;lastSeenMoveCount=0;
+    currentGameId='single_'+Date.now()+'_'+Math.random().toString(36).slice(2,8);chessPieces=initialBoard();chessTurn='red';chessGameOver=false;chessSelectedIdx=-1;chessValidMoves=[];chessDangerMoves=[];lastMove=null;moveHistory=[];isBannerDismissed=false;lastSeenMoveCount=0;
     hideModal('win-modal');$('result-stamp').hidden=true;$('result-stamp').classList.remove('stamp-win','stamp-loss');renderBoard();updateStatus();$('room-waiting').textContent='新的一局開始！';
   }catch(e){rematchResetStarted=false;throw e}
 }
@@ -94,7 +95,7 @@ async function connectFirebase(){
       import('https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js')
     ]);
     firebaseApi={...appMod,...authMod,...dbMod};
-    app=firebaseApi.initializeApp(firebaseConfig);auth=firebaseApi.getAuth(app);db=firebaseApi.getDatabase(app);
+    app=firebaseApi.getApps().find(a=>a.name==='xiangqi-player-accounts')||firebaseApi.initializeApp(firebaseConfig,'xiangqi-player-accounts');auth=firebaseApi.getAuth(app);db=firebaseApi.getDatabase(app);
     // 優先使用本機持久登入，降低 iPhone 關閉瀏覽器後匿名 UID 改變的機率。
     // 若瀏覽器是私人瀏覽或使用者清除了網站資料，仍可能無法恢復原 UID。
     try{await firebaseApi.setPersistence(auth,firebaseApi.browserLocalPersistence)}catch(persistenceError){console.warn('無法設定本機登入持久性，沿用 Firebase 預設設定',persistenceError)}
@@ -103,7 +104,8 @@ async function connectFirebase(){
     const existingUser=await new Promise(resolve=>{unsubscribeAuth=firebaseApi.onAuthStateChanged(auth,u=>{unsubscribeAuth?.();resolve(u)});});
     if(existingUser) user=existingUser;
     else user=(await firebaseApi.signInAnonymously(auth)).user;
-    $('online-status').textContent='Firebase 已連線（匿名玩家），可以建立或加入房間。';
+    if(user&&!user.isAnonymous){try{const profileSnap=await firebaseApi.get(firebaseApi.ref(db,`users/${user.uid}/profile`));const profile=profileSnap.val()||{};if(profile.displayName){playerDisplayName=String(profile.displayName).slice(0,18);localStorage.setItem('xiangqi-nickname',playerDisplayName);if($('player-nickname'))$('player-nickname').value=playerDisplayName;}}catch(e){console.warn('無法載入帳號名稱',e)}}
+    $('online-status').textContent=user&&!user.isAnonymous?`已登入：${playerDisplayName}，可以建立或加入房間。`:'Firebase 已連線（訪客模式），可以建立或加入房間。';
     initOnlinePublicRooms();
     if(!inviteRoomCode) await restoreSavedRoom();
     attemptAutoJoinInvite();
@@ -111,7 +113,7 @@ async function connectFirebase(){
 }
 function getNickname(){
   const input=$('player-nickname');
-  const typed=(input?.value||localStorage.getItem('xiangqi-nickname')||'棋手').trim().replace(/[<>]/g,'').slice(0,18);
+  const typed=(playerDisplayName!=='棋手'?playerDisplayName:(input?.value||localStorage.getItem('xiangqi-nickname')||'棋手')).trim().replace(/[<>]/g,'').slice(0,18);
   const name=typed||'棋手';
   localStorage.setItem('xiangqi-nickname',name);
   if(input)input.value=name;
@@ -326,7 +328,8 @@ async function leaveRoom(){
       await set(ref(db,`rooms/${code}/presence/${myColor}`),{online:false,lastSeen:Date.now(),uid:user.uid});
       const winnerName=room.playerNames?.[otherColor]||(otherColor==='red'?'紅方':'黑方');
       const loserName=room.playerNames?.[myColor]||(myColor==='red'?'紅方':'黑方');
-      await update(roomRef,{status:'finished',winner:otherColor,reason:'對手因退出遊戲而認輸，己方獲得勝利。',winnerName,loserName,finishedAt:Date.now()});
+      const finishedAt=Date.now();await update(roomRef,{status:'finished',winner:otherColor,reason:'對手因退出遊戲而認輸，己方獲得勝利。',winnerName,loserName,finishedAt});
+      await savePlayerMatch({matchId:`online_${code}_${finishedAt}_${otherColor}`,mode:'online',result:'loss',winner:otherColor,reason:'你因退出遊戲而被判定認輸。',finishedAt,moveCount,opponentName:winnerName,roomCode:code});
       exitRoomLocally('你已認輸並離開房間。');onlineMode=true;
       return;
     }
@@ -419,6 +422,7 @@ function enterRoom(code){
       renderBoard();updateStatus();applyingRemote=false;
     }
     if(room.status==='finished'&&opponentDisconnectTimer){clearTimeout(opponentDisconnectTimer);opponentDisconnectTimer=null;}
+    if(room.status==='finished'&&room.winner&&myColor){const resultKey=`online_${code}_${Number(room.finishedAt||room.moveCount||0)}_${room.winner}`;savePlayerMatch({matchId:resultKey,mode:'online',result:room.winner===myColor?'win':'loss',winner:room.winner,reason:room.reason||'',finishedAt:Number(room.finishedAt||Date.now()),moveCount:Number(room.moveCount||0),opponentName:room.playerNames?.[myColor==='red'?'black':'red']||'對手',roomCode:code});}
     if(room.status==='finished'&&room.winner&&$('win-modal').hidden){
       currentPlayerNames={red:room.playerNames?.red||'紅方',black:room.playerNames?.black||'黑方'};
       setResultStamp(room.winner===myColor);
@@ -457,7 +461,7 @@ function enterRoom(code){
     }else if(notice.type==='rematch-declined'){
       if(notice.senderUid!==user?.uid){window.alert('對方不再繼續對局，房間即將關閉。');closeFinishedRoom(code,'對局已結束，房間已關閉。').catch(console.error);}
     }else if(notice.type==='rematch-started'){
-      chessPieces=initialBoard();chessTurn='red';chessGameOver=false;chessSelectedIdx=-1;chessValidMoves=[];chessDangerMoves=[];lastMove=null;moveHistory=[];isBannerDismissed=false;lastSeenMoveCount=0;rematchResetStarted=false;disconnectHandledRoom='';hideModal('win-modal');$('result-stamp').hidden=true;$('result-stamp').classList.remove('stamp-win','stamp-loss');renderBoard();updateStatus();$('room-waiting').textContent='新的一局開始！';
+      currentGameId='single_'+Date.now()+'_'+Math.random().toString(36).slice(2,8);chessPieces=initialBoard();chessTurn='red';chessGameOver=false;chessSelectedIdx=-1;chessValidMoves=[];chessDangerMoves=[];lastMove=null;moveHistory=[];isBannerDismissed=false;lastSeenMoveCount=0;rematchResetStarted=false;disconnectHandledRoom='';hideModal('win-modal');$('result-stamp').hidden=true;$('result-stamp').classList.remove('stamp-win','stamp-loss');renderBoard();updateStatus();$('room-waiting').textContent='新的一局開始！';
     }
   },error=>console.warn('房間通知讀取失敗',error));
 

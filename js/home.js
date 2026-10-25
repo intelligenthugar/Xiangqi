@@ -117,7 +117,7 @@ function applySiteControl(control = {}) {
     else if (link.dataset.siteDisabled) { delete link.dataset.siteDisabled; link.removeAttribute('aria-disabled'); link.style.opacity=''; link.style.pointerEvents=''; }
   });
   if (!siteControlEnabled) {
-    $('public-rooms-status').textContent = '網站目前暫停遊玩；管理員仍可透過右下角 ⚙ 入口登入管理中心。';
+    if ($('public-rooms-status')) $('public-rooms-status').textContent = '網站目前暫停遊玩；管理員仍可透過右下角 ⚙ 入口登入管理中心。';
   }
 }
 async function startSiteTracking() {
@@ -140,7 +140,7 @@ async function startSiteTracking() {
     dbMod.onValue(controlRef, snap => applySiteControl(snap.val() || {playEnabled:true,announcement:''}), error => {
       console.warn('網站設定讀取失敗', error);
       applySiteControl({playEnabled:true,announcement:''});
-      $('public-rooms-status').textContent = '無法讀取網站公告／開放狀態；請確認 Firebase Rules。';
+      if ($('public-rooms-status')) $('public-rooms-status').textContent = '無法讀取網站公告／開放狀態；請確認 Firebase Rules。';
     });
     const currentRef = dbMod.ref(database, `siteVisitors/current/${uid}`);
     const historyRef = dbMod.ref(database, `siteVisitors/history/${uid}`);
@@ -159,6 +159,7 @@ async function startSiteTracking() {
 document.addEventListener('click', event => { if (window.__xiangqiPlayEnabled === false) { const link = event.target.closest('a'); if (link && !link.href.includes('admin.html')) { event.preventDefault(); event.stopPropagation(); window.alert('網站目前暫停遊玩，請稍後再來。'); } } }, true);
 
 async function initRooms() {
+  if (!$('public-rooms-status') || !$('public-rooms-list')) return;
   if (roomsListenerStarted) return;
   if (firebaseConfig.apiKey === 'YOUR_API_KEY' || String(firebaseConfig.databaseURL).includes('YOUR_DATABASE')) {
     $('public-rooms-status').textContent = '尚未設定 Firebase；單機模式仍可使用。'; return;
@@ -204,7 +205,7 @@ async function initRooms() {
     $('public-rooms-status').textContent = `Firebase 連線失敗：${e.message || e}`;
   }
 }
-$('refresh-rooms-btn').addEventListener('click', () => {
+$('refresh-rooms-btn')?.addEventListener('click', () => {
   if (!db || !api) { initRooms(); return; }
   api.get(api.ref(db, 'publicRooms')).then(snap => {
     const value = snap.val() || {};
@@ -272,3 +273,180 @@ if (tutorialRoot) {
   });
   renderQuiz();
 }
+
+
+// Email/password player accounts, editable display name, and per-account match history.
+let accountApi = null, accountAuth = null, accountDb = null, accountProfile = null;
+let accountAuthListenerStarted = false;
+const accountModal = $('account-modal');
+function accountStatus(message, error = false) {
+  const node = $('account-status');
+  if (!node) return;
+  node.textContent = message || '';
+  node.classList.toggle('is-error', !!error);
+}
+function cleanPlayerName(value) {
+  return String(value || '').replace(/[<>\u0000-\u001f]/g, '').trim().slice(0, 18);
+}
+function isValidAccountEmail(value) {
+  const email = String(value || '').trim();
+  if (email.length > 254 || /\s/.test(email)) return false;
+  return /^[A-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?(?:\.[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?)+$/i.test(email);
+}
+function openAccountModal() {
+  if (accountModal) accountModal.hidden = false;
+  accountStatus('');
+}
+function closeAccountModal() {
+  const user = accountAuth?.currentUser;
+  if (user && !user.isAnonymous && !accountProfile?.displayName) {
+    accountStatus('請先設定使用者名稱，才能使用帳號功能。', true);
+    return;
+  }
+  if (accountModal) accountModal.hidden = true;
+}
+function paintAccountButton(user) {
+  const button = $('account-open-btn');
+  if (!button) return;
+  button.textContent = user && !user.isAnonymous ? (accountProfile?.displayName || '設定使用者名稱') : '登入／註冊';
+  button.title = user && !user.isAnonymous ? '查看個人資料與對戰紀錄' : '登入或建立棋手帳號';
+}
+function setAccountView(user) {
+  const signedIn = !!user && !user.isAnonymous;
+  const needsName = signedIn && !accountProfile?.displayName;
+  $('account-auth-fields').hidden = signedIn && !needsName;
+  $('account-profile-area').hidden = !signedIn || needsName;
+  $('account-auth-actions').hidden = signedIn;
+  $('account-setup-save-btn').hidden = !needsName;
+  $('account-name-label').hidden = !needsName;
+  $('account-username').hidden = !needsName;
+  $('account-close-btn').hidden = needsName;
+  $('account-modal-title').textContent = needsName ? '請先設定使用者名稱' : signedIn ? '👤 我的棋手帳號' : '👤 登入／註冊';
+  $('account-subtitle').textContent = needsName ? '第一次登入必須設定名稱，之後可以隨時修改。' : signedIn ? '你的對戰紀錄會跟著帳號保存。' : '註冊帳號即可跨裝置保存單機與多人對戰紀錄。';
+  if (signedIn && !needsName) {
+    $('account-profile-name').textContent = accountProfile.displayName;
+    $('account-edit-name').value = accountProfile.displayName;
+  }
+  paintAccountButton(user);
+  if (needsName && accountModal) accountModal.hidden = false;
+}
+async function initializeAccountSystem() {
+  if (accountApi && accountAuth && accountDb) return;
+  if (firebaseConfig.apiKey === 'YOUR_API_KEY' || String(firebaseConfig.databaseURL).includes('YOUR_DATABASE')) {
+    accountStatus('請先設定 js/firebase-config.js 的 Firebase 設定。', true);
+    return;
+  }
+  const [appMod, authMod, dbMod] = await Promise.all([
+    import('https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js'),
+    import('https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js'),
+    import('https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js')
+  ]);
+  accountApi = {...appMod, ...authMod, ...dbMod};
+  const app = accountApi.getApps().find(a => a.name === 'xiangqi-player-accounts') || accountApi.initializeApp(firebaseConfig, 'xiangqi-player-accounts');
+  accountAuth = accountApi.getAuth(app);
+  accountDb = accountApi.getDatabase(app);
+  try { await accountApi.setPersistence(accountAuth, accountApi.browserLocalPersistence); } catch {}
+  if (!accountAuthListenerStarted) {
+    accountAuthListenerStarted = true;
+    accountApi.onAuthStateChanged(accountAuth, async user => {
+      accountProfile = null;
+      if (user && !user.isAnonymous) {
+        try {
+          const snap = await accountApi.get(accountApi.ref(accountDb, `users/${user.uid}/profile`));
+          accountProfile = snap.val() || null;
+        } catch (e) { accountStatus(`讀取個人資料失敗：${e.message || e}`, true); }
+      }
+      setAccountView(user);
+      if (user && !user.isAnonymous && accountProfile?.displayName) await loadAccountMatches(user.uid);
+      else if ($('account-match-list')) $('account-match-list').innerHTML = '<p class="muted small">登入後會載入紀錄。</p>';
+    });
+  }
+}
+async function loadAccountMatches(uid) {
+  try {
+    const snap = await accountApi.get(accountApi.ref(accountDb, `users/${uid}/matches`));
+    const values = snap.val() || {};
+    const matches = Object.entries(values).map(([id, value]) => ({id, ...value})).sort((a,b) => Number(b.finishedAt || 0) - Number(a.finishedAt || 0));
+    const stats = {played: matches.length, wins: 0, losses: 0, draws: 0};
+    for (const match of matches) if (match.result === 'win') stats.wins++; else if (match.result === 'loss') stats.losses++; else stats.draws++;
+    $('account-stat-played').textContent = stats.played;
+    $('account-stat-wins').textContent = stats.wins;
+    $('account-stat-losses').textContent = stats.losses;
+    $('account-stat-draws').textContent = stats.draws;
+    const list = $('account-match-list');
+    if (!matches.length) { list.innerHTML = '<p class="muted small">還沒有對戰紀錄，完成第一場對局後就會顯示在這裡。</p>'; return; }
+    list.innerHTML = matches.slice(0, 12).map(m => {
+      const result = m.result === 'win' ? '勝利' : m.result === 'loss' ? '失敗' : '平手';
+      const resultClass = m.result === 'win' ? 'match-win' : m.result === 'loss' ? 'match-loss' : 'match-draw';
+      const mode = m.mode === 'online' ? '多人連線' : m.mode === 'pvp' ? '單機雙人' : `單機 AI${m.aiLevel ? `（${m.aiLevel === 'easy' ? '初級' : '高級'}）` : ''}`;
+      const date = Number(m.finishedAt) > 0 ? new Date(Number(m.finishedAt)).toLocaleString('zh-TW') : '時間未知';
+      return `<article class="account-match-row"><div><strong>${escapeHtml(mode)}</strong><span class="muted small">${escapeHtml(date)} · ${Number(m.moveCount || 0)} 步</span>${m.opponentName ? `<span class="muted small">對手：${escapeHtml(m.opponentName)}</span>` : ''}</div><b class="${resultClass}">${result}</b></article>`;
+    }).join('');
+  } catch (e) {
+    $('account-match-list').innerHTML = `<p class="muted small">無法載入戰績：${escapeHtml(e.message || e)}。請確認 Firebase Rules 已允許本人讀取 users/${escapeHtml(uid)}。</p>`;
+  }
+}
+async function registerAccount() {
+  try {
+    await initializeAccountSystem();
+    if (!accountApi) return;
+    const email = $('account-email').value.trim(), password = $('account-password').value;
+    if (!email || !password) { accountStatus('請輸入電子郵件與密碼。', true); return; }
+    if (!isValidAccountEmail(email)) { accountStatus('必須填寫有效的電子郵件地址，例如 name@example.com。', true); $('account-email').focus(); return; }
+    if (password.length < 6) { accountStatus('密碼必須至少包含 6 個字元。', true); $('account-password').focus(); return; }
+    $('account-register-btn').disabled = true;
+    accountStatus('正在建立帳號…');
+    await accountApi.createUserWithEmailAndPassword(accountAuth, email, password);
+    accountStatus('帳號建立成功，請設定使用者名稱。');
+  } catch (e) {
+    const msg = e.code === 'auth/email-already-in-use' ? '這個電子郵件已註冊，請直接登入。' : e.code === 'auth/invalid-email' ? '電子郵件格式不正確。' : e.code === 'auth/weak-password' ? '密碼強度不足，請使用至少 6 個字元。' : `註冊失敗：${e.message || e}`;
+    accountStatus(msg, true);
+  } finally { if ($('account-register-btn')) $('account-register-btn').disabled = false; }
+}
+async function loginAccount() {
+  try {
+    await initializeAccountSystem();
+    if (!accountApi) return;
+    const email = $('account-email').value.trim(), password = $('account-password').value;
+    if (!email || !password) { accountStatus('請輸入電子郵件與密碼。', true); return; }
+    if (!isValidAccountEmail(email)) { accountStatus('必須填寫有效的電子郵件地址，例如 name@example.com。', true); $('account-email').focus(); return; }
+    if (password.length < 6) { accountStatus('密碼必須至少包含 6 個字元。', true); $('account-password').focus(); return; }
+    $('account-login-btn').disabled = true;
+    accountStatus('正在登入…');
+    await accountApi.signInWithEmailAndPassword(accountAuth, email, password);
+    accountStatus('登入成功。');
+  } catch (e) {
+    accountStatus(e.code === 'auth/invalid-credential' || e.code === 'auth/wrong-password' || e.code === 'auth/user-not-found' ? '電子郵件或密碼錯誤。' : `登入失敗：${e.message || e}`, true);
+  } finally { if ($('account-login-btn')) $('account-login-btn').disabled = false; }
+}
+async function saveAccountName() {
+  const user = accountAuth?.currentUser;
+  if (!user || user.isAnonymous) { accountStatus('請先登入帳號。', true); return; }
+  const firstSetup = !accountProfile?.displayName;
+  const name = cleanPlayerName(firstSetup ? $('account-username').value : $('account-edit-name').value);
+  if (!name) { accountStatus('使用者名稱不可空白。', true); return; }
+  try {
+    accountStatus('正在儲存名稱…');
+    await accountApi.set(accountApi.ref(accountDb, `users/${user.uid}/profile`), {displayName:name, email:user.email || '', updatedAt:Date.now(), createdAt:accountProfile?.createdAt || Date.now()});
+    accountProfile = { ...(accountProfile || {}), displayName:name, email:user.email || '', updatedAt:Date.now() };
+    localStorage.setItem('xiangqi-nickname', name);
+    setAccountView(user);
+    accountStatus('使用者名稱已儲存。');
+  } catch (e) { accountStatus(`儲存失敗：${e.message || e}。請確認 Firebase Rules。`, true); }
+}
+$('account-open-btn')?.addEventListener('click', async () => {
+  openAccountModal();
+  try { await initializeAccountSystem(); const u = accountAuth?.currentUser; if (!u || u.isAnonymous) { $('account-auth-fields').hidden = false; $('account-profile-area').hidden = true; } }
+  catch (e) { accountStatus(`帳號系統初始化失敗：${e.message || e}`, true); }
+});
+$('account-close-btn')?.addEventListener('click', closeAccountModal);
+$('account-modal')?.addEventListener('click', e => { if (e.target === accountModal) closeAccountModal(); });
+$('account-login-btn')?.addEventListener('click', loginAccount);
+$('account-register-btn')?.addEventListener('click', registerAccount);
+$('account-save-name-btn')?.addEventListener('click', saveAccountName);
+$('account-setup-save-btn')?.addEventListener('click', saveAccountName);
+$('account-logout-btn')?.addEventListener('click', async () => { try { await accountApi.signOut(accountAuth); accountProfile = null; accountStatus('已登出。'); } catch (e) { accountStatus(`登出失敗：${e.message || e}`, true); } });
+$('account-password')?.addEventListener('keydown', e => { if (e.key === 'Enter') loginAccount(); });
+$('account-username')?.addEventListener('keydown', e => { if (e.key === 'Enter') saveAccountName(); });
+$('account-edit-name')?.addEventListener('keydown', e => { if (e.key === 'Enter') saveAccountName(); });
+initializeAccountSystem().catch(e => { console.warn('帳號系統初始化失敗', e); accountStatus(`帳號系統初始化失敗：${e.message || e}`, true); });
