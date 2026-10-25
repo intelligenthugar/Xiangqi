@@ -1,6 +1,5 @@
 import { firebaseConfig } from './firebase-config.js';
 const $ = id => document.getElementById(id);
-const ADMIN_PASSWORD = 'prohaugar'; // Prototype only: visible in source; not secure authentication.
 let db = null, api = null, roomsCache = [], allRoomsCache = [], roomsListenerStarted = false;
 try { const savedRoom = JSON.parse(localStorage.getItem('xiangqi-active-room') || 'null'); if (savedRoom?.code) { $('resume-room-container').hidden = false; $('resume-room-link').href = `chess.html?mode=online&room=${encodeURIComponent(savedRoom.code)}`; $('resume-room-link').textContent = `恢復房間 ${savedRoom.code}`; } } catch {}
 function escapeHtml(value) { return String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
@@ -25,6 +24,65 @@ function renderAdminRoomList(target) {
     return `<article class="public-room-card"><div class="public-room-main"><strong class="room-code">${escapeHtml(r.code)}</strong><span class="room-status">${visibility} · ${status}</span><span class="muted small">房主：${escapeHtml(r.hostName||r.playerNames?.red||'棋手')}</span><span class="muted small">建立：${escapeHtml(formatTime(r.createdAt))}</span><span class="muted small">人數：${players}　${r.hasPassword||r.settings?.hasPassword?'🔒 需要密碼':'🔓 無密碼'}</span></div><div>${join}</div></article>`;
   }).join('');
 }
+let siteControlEnabled = true;
+let siteControlLoaded = false;
+function applySiteControl(control = {}) {
+  window.__xiangqiPlayEnabled = control.playEnabled !== false;
+  siteControlEnabled = control.playEnabled !== false;
+  siteControlLoaded = true;
+  const announcement = $('site-announcement');
+  const announcementText = String(control.announcement || '').trim();
+  if (announcement && announcementText) { $('site-announcement-text').textContent = announcementText; announcement.hidden = false; }
+  else if (announcement) announcement.hidden = true;
+  const maintenance = $('site-maintenance-banner');
+  if (maintenance) { maintenance.hidden = siteControlEnabled; if (control.maintenanceMessage) $('site-maintenance-message').textContent = control.maintenanceMessage; }
+  document.querySelectorAll('a.mode-card, #resume-room-link, .room-join-link').forEach(link => {
+    if (link.id === 'admin-fab' || link.href.includes('admin.html')) return;
+    if (!siteControlEnabled) { link.dataset.siteDisabled = '1'; link.setAttribute('aria-disabled','true'); link.style.opacity='.45'; link.style.pointerEvents='none'; }
+    else if (link.dataset.siteDisabled) { delete link.dataset.siteDisabled; link.removeAttribute('aria-disabled'); link.style.opacity=''; link.style.pointerEvents=''; }
+  });
+  if (!siteControlEnabled) {
+    $('public-rooms-status').textContent = '網站目前暫停遊玩；管理員仍可透過右下角 ⚙ 入口登入管理中心。';
+  }
+}
+async function startSiteTracking() {
+  if (firebaseConfig.apiKey === 'YOUR_API_KEY' || String(firebaseConfig.databaseURL).includes('YOUR_DATABASE')) return;
+  try {
+    const [appMod, authMod, dbMod] = await Promise.all([
+      import('https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js'),
+      import('https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js'),
+      import('https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js')
+    ]);
+    const app = appMod.getApps().find(a => a.name === 'xiangqi-site-tracking') || appMod.initializeApp(firebaseConfig, 'xiangqi-site-tracking');
+    const auth = authMod.getAuth(app);
+    const database = dbMod.getDatabase(app);
+    try { await authMod.setPersistence(auth, authMod.browserLocalPersistence); } catch {}
+    let stop;
+    const user = await new Promise(resolve => { stop = authMod.onAuthStateChanged(auth, u => { stop?.(); resolve(u); }); });
+    const currentUser = user || (await authMod.signInAnonymously(auth)).user;
+    const uid = currentUser.uid;
+    const controlRef = dbMod.ref(database, 'siteControl');
+    dbMod.onValue(controlRef, snap => applySiteControl(snap.val() || {playEnabled:true,announcement:''}), error => {
+      console.warn('網站設定讀取失敗', error);
+      applySiteControl({playEnabled:true,announcement:''});
+      $('public-rooms-status').textContent = '無法讀取網站公告／開放狀態；請確認 Firebase Rules。';
+    });
+    const currentRef = dbMod.ref(database, `siteVisitors/current/${uid}`);
+    const historyRef = dbMod.ref(database, `siteVisitors/history/${uid}`);
+    const now = Date.now();
+    const displayName = (localStorage.getItem('xiangqi-nickname') || '訪客').replace(/[<>]/g,'').slice(0,18);
+    await dbMod.set(currentRef, {uid, name:displayName, online:true, lastSeen:dbMod.serverTimestamp(), page:'大廳'});
+    try { await dbMod.onDisconnect(currentRef).update({online:false,lastSeen:dbMod.serverTimestamp()}); } catch {}
+    await dbMod.runTransaction(historyRef, old => ({uid, name:displayName, firstSeen:old?.firstSeen || now, lastSeen:now, visits:Number(old?.visits||0)+1, lastPage:'大廳'}));
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') dbMod.update(currentRef,{online:true,lastSeen:dbMod.serverTimestamp(),page:'大廳'}).catch(()=>{});
+    });
+    setInterval(() => { if (document.visibilityState === 'visible') dbMod.update(currentRef,{online:true,lastSeen:dbMod.serverTimestamp(),page:'大廳'}).catch(()=>{}); }, 45000);
+  } catch (e) { console.warn('網站狀態／訪客追蹤未啟用', e); }
+}
+
+document.addEventListener('click', event => { if (window.__xiangqiPlayEnabled === false) { const link = event.target.closest('a'); if (link && !link.href.includes('admin.html')) { event.preventDefault(); event.stopPropagation(); window.alert('網站目前暫停遊玩，請稍後再來。'); } } }, true);
+
 async function initRooms() {
   if (roomsListenerStarted) return;
   if (firebaseConfig.apiKey === 'YOUR_API_KEY' || String(firebaseConfig.databaseURL).includes('YOUR_DATABASE')) {
@@ -50,7 +108,6 @@ async function initRooms() {
       roomsCache = Object.entries(value).map(([code, r]) => ({...r, code: r.code || code}));
       $('public-rooms-status').textContent = `目前公開房間：${roomsCache.filter(r=>r.status==='waiting').length} 間等待加入`;
       renderRoomList($('public-rooms-list'));
-      if (!$('admin-dashboard').hidden) renderAdminRoomList($('admin-room-list'));
     }, error => {
       $('public-rooms-status').textContent = error?.code?.includes('permission-denied')
         ? 'Firebase 尚未允許讀取公開房間列表。請將 README 中 publicRooms 規則合併至現有 Rules 後發布。'
@@ -64,10 +121,8 @@ async function initRooms() {
         const pub = publicByCode.get(code) || {};
         return {...pub, code, ...room, visibility: room.settings?.visibility || (pub.hostUid ? 'public' : 'private'), hostName: pub.hostName || room.playerNames?.red || '棋手', playersCount: room.players?.black ? 2 : 1, hasPassword: !!(room.settings?.hasPassword || room.settings?.passwordHash)};
       });
-      if (!$('admin-dashboard').hidden) renderAdminRoomList($('admin-room-list'));
     }, error => {
       console.warn('管理員房間清單讀取失敗', error);
-      if (!$('admin-dashboard').hidden) $('admin-room-list').innerHTML = `<p class="muted small">讀取私人／全部房間失敗：${escapeHtml(error.message||error)}。請確認 rooms 節點的 .read 規則允許 auth != null。</p>`;
     });
   } catch (e) {
     console.error(e);
@@ -83,37 +138,9 @@ $('refresh-rooms-btn').addEventListener('click', () => {
     renderRoomList($('public-rooms-list'));
   }).catch(e => $('public-rooms-status').textContent = `讀取失敗：${e.message||e}`);
 });
-$('admin-fab').addEventListener('click', () => { window.location.href = 'admin.html'; });
-$('admin-close').addEventListener('click', () => { $('admin-modal').hidden = true; });
-$('admin-modal').addEventListener('click', e => { if (e.target === $('admin-modal')) $('admin-modal').hidden = true; });
-function adminLogin() {
-  if ($('admin-password-input').value !== ADMIN_PASSWORD) {
-    $('admin-login-status').textContent = '密碼錯誤。';
-    return;
-  }
-  $('admin-login-area').hidden = true;
-  $('admin-dashboard').hidden = false;
-  if (db) renderAdminRoomList($('admin-room-list'));
-  else $('admin-room-list').innerHTML = '<p class="muted small">Firebase 尚未連線，無法載入公開房間。</p>';
-}
-$('admin-login-btn').addEventListener('click', adminLogin);
-$('admin-password-input').addEventListener('keydown', e => { if (e.key === 'Enter') adminLogin(); });
-$('admin-refresh-btn').addEventListener('click', async () => {
-  if (!db || !api) return;
-  try {
-    const [publicSnap, allSnap] = await Promise.all([api.get(api.ref(db, 'publicRooms')), api.get(api.ref(db, 'rooms'))]);
-    const publicValue = publicSnap.val() || {};
-    roomsCache = Object.entries(publicValue).map(([code,r])=>({...r,code:r.code||code}));
-    const publicByCode = new Map(roomsCache.map(r => [r.code, r]));
-    const allValue = allSnap.val() || {};
-    allRoomsCache = Object.entries(allValue).map(([code, room]) => {
-      const pub = publicByCode.get(code) || {};
-      return {...pub, code, ...room, visibility: room.settings?.visibility || (pub.hostUid ? 'public' : 'private'), hostName: pub.hostName || room.playerNames?.red || '棋手', playersCount: room.players?.black ? 2 : 1, hasPassword: !!(room.settings?.hasPassword || room.settings?.passwordHash)};
-    });
-    renderAdminRoomList($('admin-room-list'));
-  } catch(e) { $('admin-room-list').innerHTML = `<p class="muted small">載入失敗：${escapeHtml(e.message||e)}。請確認 rooms 節點讀取規則。</p>`; }
-});
+
 initRooms();
+startSiteTracking();
 
 
 // Interactive Xiangqi tutorial on the home page.

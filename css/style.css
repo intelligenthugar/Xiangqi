@@ -88,3 +88,15 @@
 .result-stamp.stamp-loss{color:#f44336;text-shadow:0 2px 0 #7f0000,0 5px 0 #5d0000,0 0 14px #f4433688;-webkit-text-stroke:1px #ffcdd2}
 @keyframes resultStampIn{0%{opacity:0;transform:translateY(-16px) scale(.55) rotate(-8deg)}70%{opacity:1;transform:translateY(0) scale(1.08) rotate(2deg)}100%{opacity:1;transform:scale(1) rotate(0)}}
 @media(max-width:480px){.result-stamp{font-size:clamp(78px,27vw,112px);margin-bottom:8px}.modal-content{padding:20px 16px}}
+
+/* v16: editable lobby announcement and maintenance state */
+.site-announcement,.site-maintenance-banner{max-width:1100px;margin:0 auto 18px;padding:16px 20px;border-radius:14px;box-sizing:border-box;line-height:1.6}
+.site-announcement{border:1px solid #d6a93b;background:linear-gradient(110deg,#d6a93b22,#f3cf6820);box-shadow:0 8px 24px #0002}
+.site-announcement strong{display:block;color:#e5b93f;font-size:1.1rem;margin-bottom:4px}.site-announcement p,.site-maintenance-banner p{margin:0;white-space:pre-wrap;overflow-wrap:anywhere}
+.site-maintenance-banner{border:1px solid #d94841;background:#d9484118}.site-maintenance-banner strong{display:block;color:#ff625b;font-size:1.2rem;margin-bottom:4px}
+.admin-fab{position:fixed;right:18px;bottom:18px;z-index:1000;display:flex;align-items:center;justify-content:center;width:48px;height:48px;border-radius:50%;background:#262626;color:#f4c84a;border:1px solid #c8a54a;text-decoration:none;font-size:23px;box-shadow:0 4px 16px #0005}
+.admin-fab:hover{transform:translateY(-2px)}
+.site-closed-overlay{position:fixed;inset:0;z-index:99999;background:rgba(10,12,18,.96);display:flex;align-items:center;justify-content:center;padding:24px;box-sizing:border-box;text-align:center;color:#f5f5f5}
+.site-closed-card{max-width:520px;padding:28px;border:1px solid #d6a93b;border-radius:18px;background:#171a22;box-shadow:0 18px 60px #0008}.site-closed-card h1{color:#f0c54b}.site-closed-card p{line-height:1.7}.site-closed-card a{display:inline-block;margin-top:10px;padding:10px 18px;border-radius:9px;background:#d6a93b;color:#171717;font-weight:800;text-decoration:none}
+.admin-control-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.admin-control-grid textarea{width:100%;min-height:100px;box-sizing:border-box;padding:12px;border:1px solid var(--border-color);border-radius:9px;background:var(--bg-color);color:var(--text-color);font:inherit}.admin-visitor-list{display:grid;gap:8px}.admin-visitor-item{padding:11px 12px;border:1px solid var(--border-color);border-radius:10px;overflow-wrap:anywhere}.admin-visitor-item strong{display:block}.admin-visitor-item span{font-size:12px;color:var(--muted-color,#999)}
+@media(max-width:650px){.site-announcement,.site-maintenance-banner{margin-left:12px;margin-right:12px;padding:13px}.admin-control-grid{grid-template-columns:1fr}}
