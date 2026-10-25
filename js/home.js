@@ -2,16 +2,7 @@ import { firebaseConfig } from './firebase-config.js';
 const $ = id => document.getElementById(id);
 const ADMIN_PASSWORD = 'prohaugar'; // Prototype only: visible in source; not secure authentication.
 let db = null, api = null, roomsCache = [], allRoomsCache = [], roomsListenerStarted = false;
-const theme = localStorage.getItem('xiangqi-theme');
 try { const savedRoom = JSON.parse(localStorage.getItem('xiangqi-active-room') || 'null'); if (savedRoom?.code) { $('resume-room-container').hidden = false; $('resume-room-link').href = `chess.html?mode=online&room=${encodeURIComponent(savedRoom.code)}`; $('resume-room-link').textContent = `恢復房間 ${savedRoom.code}`; } } catch {}
-if (theme === 'light') document.body.classList.remove('dark-mode');
-$('theme-btn').textContent = document.body.classList.contains('dark-mode') ? '☀️ 淺色' : '🌙 深色';
-$('theme-btn').addEventListener('click', () => {
-  document.body.classList.toggle('dark-mode');
-  const dark = document.body.classList.contains('dark-mode');
-  $('theme-btn').textContent = dark ? '☀️ 淺色' : '🌙 深色';
-  localStorage.setItem('xiangqi-theme', dark ? 'dark' : 'light');
-});
 function escapeHtml(value) { return String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function formatTime(value) { try { return new Date(Number(value)).toLocaleString('zh-TW', {month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}); } catch { return '時間未知'; } }
 function renderRoomList(target, includeNonWaiting = false) {
@@ -123,3 +114,59 @@ $('admin-refresh-btn').addEventListener('click', async () => {
   } catch(e) { $('admin-room-list').innerHTML = `<p class="muted small">載入失敗：${escapeHtml(e.message||e)}。請確認 rooms 節點讀取規則。</p>`; }
 });
 initRooms();
+
+
+// Interactive Xiangqi tutorial on the home page.
+const tutorialRoot = $('xiangqi-tutorial');
+if (tutorialRoot) {
+  const tutorialTabs = [...tutorialRoot.querySelectorAll('[data-tutorial-tab]')];
+  const tutorialPanels = [...tutorialRoot.querySelectorAll('[data-tutorial-panel]')];
+  tutorialTabs.forEach(tab => tab.addEventListener('click', () => {
+    const name = tab.dataset.tutorialTab;
+    tutorialTabs.forEach(item => { const active = item === tab; item.classList.toggle('active', active); item.setAttribute('aria-selected', String(active)); });
+    tutorialPanels.forEach(panel => { panel.hidden = panel.dataset.tutorialPanel !== name; });
+  }));
+
+  const pieceLessons = {
+    general: {icon:'帥',title:'帥／將',description:'每次沿直線走一格，只能在九宮內活動。將與帥不能直接照面。',tip:'小提醒：保護主帥是第一要務，別讓它暴露在車、炮的攻擊線上。'},
+    advisor: {icon:'仕',title:'仕／士',description:'每次沿斜線走一格，只能在九宮內活動。它主要負責守護將／帥。',tip:'小提醒：不要為了吃小棋而隨意把士、仕移離主帥身邊。'},
+    elephant: {icon:'相',title:'相／象',description:'每次斜走兩格，俗稱「田」字走法；中間的格子若有棋子擋住就不能走，而且不能過河。',tip:'小提醒：象眼被塞住就不能走，走之前記得檢查中間點。'},
+    rook: {icon:'俥',title:'俥／車',description:'可以沿橫線或直線走任意格，但路徑中不能穿過其他棋子。車也沿直線吃子。',tip:'小提醒：車的威力很大，盡早讓車出動並打開通道。'},
+    horse: {icon:'傌',title:'傌／馬',description:'走「日」字：先直走一格再斜走一格。若第一步的相鄰格被棋子堵住，就叫「蹩馬腿」，不能走那個方向。',tip:'小提醒：馬不是可以跳過所有棋子的棋子，記得注意馬腿。'},
+    cannon: {icon:'炮',title:'炮／包',description:'不吃子時像車一樣沿直線移動；吃子時必須與目標之間恰好隔著一顆棋子，這顆棋子就是炮架。',tip:'小提醒：炮架很重要，沒有隔子就不能吃；隔了兩顆也不能吃。'},
+    soldier: {icon:'兵',title:'兵／卒',description:'過河前只能向前走一格；過河後可以向前或左右走一格，但永遠不能後退。',tip:'小提醒：兵卒過河後更有攻擊力，別忽略它們的推進。'}
+  };
+  const detailIcon = $('piece-detail-icon'), detailTitle = $('piece-detail-title'), detailDescription = $('piece-detail-description'), detailTip = $('piece-detail-tip');
+  tutorialRoot.querySelectorAll('[data-piece]').forEach(button => button.addEventListener('click', () => {
+    const lesson = pieceLessons[button.dataset.piece]; if (!lesson) return;
+    tutorialRoot.querySelectorAll('[data-piece]').forEach(item => item.classList.toggle('active', item === button));
+    detailIcon.textContent = lesson.icon; detailTitle.textContent = lesson.title; detailDescription.textContent = lesson.description; detailTip.textContent = lesson.tip;
+  }));
+
+  const quiz = [
+    {q:'哪一種棋子可以沿直線走任意格，直到被棋子擋住？', options:['馬','車','炮'], answer:1, explain:'答對了！車可以沿橫線或直線移動，路徑不能穿過其他棋子。'},
+    {q:'炮要吃掉對方的棋子，通常需要什麼條件？', options:['目標旁邊不能有棋子','與目標之間恰好隔一顆棋子','一定要先過河'], answer:1, explain:'答對了！炮吃子需要隔一顆棋子作為炮架。'},
+    {q:'兵／卒過河後，可以怎麼走？', options:['可以後退一格','只能向前走','可以向前或左右走一格，不能後退'], answer:2, explain:'答對了！過河後兵卒可以向前或左右走一格，但不能後退。'}
+  ];
+  let quizIndex = 0, quizScore = 0, quizAnswered = false, quizFinished = false;
+  const quizCount = $('quiz-count'), quizQuestion = $('quiz-question'), quizOptions = $('quiz-options'), quizFeedback = $('quiz-feedback'), quizNext = $('quiz-next');
+  function renderQuiz() {
+    const item = quiz[quizIndex]; quizAnswered = false; quizFinished = false;
+    quizCount.textContent = `新手測驗 · 第 ${quizIndex+1} 題，共 ${quiz.length} 題`;
+    quizQuestion.textContent = item.q; quizFeedback.textContent = '選一個答案試試看。'; quizFeedback.className = 'quiz-feedback'; quizNext.disabled = true; quizNext.textContent = quizIndex === quiz.length-1 ? '查看成績' : '下一題';
+    quizOptions.innerHTML = '';
+    item.options.forEach((label, index) => { const button = document.createElement('button'); button.type = 'button'; button.textContent = label; button.addEventListener('click', () => {
+      if (quizAnswered) return; quizAnswered = true; const correct = index === item.answer; if (correct) quizScore++;
+      [...quizOptions.children].forEach((option, optionIndex) => { option.disabled = true; if (optionIndex === item.answer) option.classList.add('correct-answer'); else if (optionIndex === index) option.classList.add('wrong-answer'); });
+      quizFeedback.textContent = (correct ? '✅ 正確！' : `❌ 正確答案是「${item.options[item.answer]}」。`) + ' ' + item.explain; quizFeedback.classList.add(correct ? 'correct' : 'wrong'); quizNext.disabled = false;
+    }); quizOptions.appendChild(button); });
+  }
+  quizNext.addEventListener('click', () => {
+    if (quizFinished) { quizIndex = 0; quizScore = 0; renderQuiz(); return; }
+    if (!quizAnswered) return;
+    if (quizIndex < quiz.length - 1) { quizIndex++; renderQuiz(); return; }
+    quizFinished = true; quizCount.textContent = '測驗完成'; quizQuestion.textContent = `你答對了 ${quizScore} / ${quiz.length} 題！`;
+    quizOptions.innerHTML = ''; quizFeedback.textContent = quizScore === quiz.length ? '太棒了！你已掌握幾個重要的基本規則。' : '可以再看一次「棋子走法」，再挑戰一次。'; quizFeedback.className = 'quiz-feedback'; quizNext.textContent = '重新測驗'; quizNext.disabled = false;
+  });
+  renderQuiz();
+}

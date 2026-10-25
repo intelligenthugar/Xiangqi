@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#121212"><title>中國象棋｜多人連線大廳</title>
-<link rel="stylesheet" href="css/style.css?v=20261025-rematch-5">
+<link rel="stylesheet" href="css/style.css?v=20261025-tutorial-v8">
 </head>
 <body class="dark-mode home-page">
 <header class="topbar"><h1>🪨 中國象棋</h1><div class="top-actions"><button class="btn-theme" id="theme-btn" type="button">☀️ 淺色</button></div></header>
@@ -12,6 +12,46 @@
   <section class="lobby-cards">
     <a class="mode-card" href="chess.html?mode=pve"><span class="card-icon">♟</span><h3 id="single-title">單機版</h3><p id="single-desc">與 AI 對弈，支援初級與高級難度。</p><span class="card-cta" id="single-cta">開始遊戲 →</span></a>
     <a class="mode-card featured" href="chess.html?mode=online"><span class="card-icon">♟♟</span><h3 id="multi-title">多人連線</h3><p id="multi-desc">建立公開或私人房間，輸入房號與朋友即時對弈。</p><span class="card-cta" id="multi-cta">進入連線大廳 →</span></a>
+  </section>
+  <section class="xiangqi-tutorial" id="xiangqi-tutorial">
+    <div class="tutorial-heading"><p class="eyebrow">新手入門 · 從零開始</p><h2>📚 象棋教學</h2><p class="muted">先認識棋盤與棋子，再學會基本戰術。點選下方分類即可開始。</p></div>
+    <div class="tutorial-tabs" role="tablist" aria-label="象棋教學分類">
+      <button class="tutorial-tab active" type="button" role="tab" aria-selected="true" data-tutorial-tab="basics">基本規則</button>
+      <button class="tutorial-tab" type="button" role="tab" aria-selected="false" data-tutorial-tab="pieces">棋子走法</button>
+      <button class="tutorial-tab" type="button" role="tab" aria-selected="false" data-tutorial-tab="strategy">新手策略</button>
+      <button class="tutorial-tab" type="button" role="tab" aria-selected="false" data-tutorial-tab="quiz">小測驗</button>
+    </div>
+    <div class="tutorial-panel" data-tutorial-panel="basics">
+      <div class="tutorial-grid">
+        <article class="tutorial-card"><span class="tutorial-number">01</span><h3>棋盤怎麼看？</h3><p>中國象棋棋盤有 <strong>9 條直線、10 條橫線</strong>。棋子放在線的交叉點上，不是放在格子中央。</p><p>棋盤中間的空白處叫做<strong>楚河、漢界</strong>，是紅黑雙方的分界。</p></article>
+        <article class="tutorial-card"><span class="tutorial-number">02</span><h3>遊戲目標</h3><p>想辦法將死對方的「將／帥」，讓對方無法解除被將軍的狀態。</p><p>如果輪到一方走棋，卻沒有任何合法走法，可能形成「困斃」，也算輸棋。</p></article>
+        <article class="tutorial-card"><span class="tutorial-number">03</span><h3>重要規則</h3><ul><li>紅方先走（本網站單機模式可能以擲硬幣決定先手）。</li><li>將與帥不能走出九宮。</li><li>將與帥不能在同一直線上直接照面，中間必須有棋子阻隔。</li><li>不能走出讓己方將／帥被將軍的棋步。</li></ul></article>
+      </div>
+    </div>
+    <div class="tutorial-panel" data-tutorial-panel="pieces" hidden>
+      <p class="muted tutorial-intro">選一個棋子，查看它的走法與新手提醒。</p>
+      <div class="piece-picker" role="group" aria-label="選擇要學習的棋子">
+        <button type="button" class="piece-choice active" data-piece="general"><span class="mini-piece red-piece">帥</span><span>帥／將</span></button>
+        <button type="button" class="piece-choice" data-piece="advisor"><span class="mini-piece red-piece">仕</span><span>仕／士</span></button>
+        <button type="button" class="piece-choice" data-piece="elephant"><span class="mini-piece red-piece">相</span><span>相／象</span></button>
+        <button type="button" class="piece-choice" data-piece="rook"><span class="mini-piece red-piece">俥</span><span>俥／車</span></button>
+        <button type="button" class="piece-choice" data-piece="horse"><span class="mini-piece red-piece">傌</span><span>傌／馬</span></button>
+        <button type="button" class="piece-choice" data-piece="cannon"><span class="mini-piece red-piece">炮</span><span>炮／包</span></button>
+        <button type="button" class="piece-choice" data-piece="soldier"><span class="mini-piece red-piece">兵</span><span>兵／卒</span></button>
+      </div>
+      <article class="piece-detail" aria-live="polite"><div class="piece-detail-icon" id="piece-detail-icon">帥</div><div><h3 id="piece-detail-title">帥／將</h3><p id="piece-detail-description">每次沿直線走一格，只能在九宮內活動。將與帥不能直接照面。</p><p class="piece-tip" id="piece-detail-tip">小提醒：保護主帥是第一要務，別讓它暴露在車、炮的攻擊線上。</p></div></article>
+    </div>
+    <div class="tutorial-panel" data-tutorial-panel="strategy" hidden>
+      <div class="tutorial-grid">
+        <article class="tutorial-card"><span class="tutorial-number">開局</span><h3>先出有力的棋</h3><p>優先讓車、馬、炮參與戰鬥，不要一開始就反覆移動同一顆棋子。</p></article>
+        <article class="tutorial-card"><span class="tutorial-number">安全</span><h3>走之前先看三件事</h3><ul><li>對手下一步能吃掉我的棋嗎？</li><li>我的將／帥安全嗎？</li><li>這一步有沒有攻擊或保護重要棋子？</li></ul></article>
+        <article class="tutorial-card"><span class="tutorial-number">戰術</span><h3>車、馬、炮互相配合</h3><p>車擅長直線控制，馬適合跳躍攻擊，炮需要一個炮架才能隔子吃子。配合比單打獨鬥更有效。</p></article>
+      </div>
+      <div class="tutorial-callout"><strong>推薦練習：</strong>進入「單機版」，先選初級 AI。每走一步都停一下，試著找出對手下一步最有威脅的走法。</div>
+    </div>
+    <div class="tutorial-panel" data-tutorial-panel="quiz" hidden>
+      <div class="quiz-card"><p class="quiz-count" id="quiz-count">新手測驗 · 第 1 題，共 3 題</p><h3 id="quiz-question">哪一種棋子可以沿直線走任意格，直到被棋子擋住？</h3><div id="quiz-options" class="quiz-options"><button type="button" data-answer="0">馬</button><button type="button" data-answer="1">車</button><button type="button" data-answer="2">炮</button></div><p id="quiz-feedback" class="quiz-feedback" aria-live="polite">選一個答案試試看。</p><button id="quiz-next" type="button" class="secondary-btn" disabled>下一題</button></div>
+    </div>
   </section>
   <div id="resume-room-container" class="resume-room-container" hidden><p>🎯 找到你上次的對局</p><a id="resume-room-link" class="room-join-link" href="chess.html?mode=online">恢復上次對局</a></div>
   <section class="public-lobby-panel">
@@ -32,5 +72,24 @@
     <section id="admin-dashboard" hidden><h3>全部房間狀態（含私人房間）</h3><p class="muted small">管理員列表會列出 rooms 節點中的公開與私人房間；目前只提供查看／加入，不提供刪除。注意：為了讓靜態網站列出全部房間，已登入的匿名使用者也能讀取房間清單；此原型不適合放置敏感資料。</p><div id="admin-room-list" class="public-rooms-list"></div><button id="admin-refresh-btn" class="secondary-btn" type="button">重新載入列表</button></section>
   </div>
 </div>
-<script type="module" src="js/home.js?v=20261025-rematch-5"></script>
+<script>
+(function () {
+  const button = document.getElementById('theme-btn');
+  if (!button) return;
+  function applyTheme(theme) {
+    document.body.classList.toggle('dark-mode', theme === 'dark');
+    button.textContent = theme === 'dark' ? '☀️ 淺色' : '🌙 深色';
+    button.setAttribute('aria-label', theme === 'dark' ? '切換為淺色模式' : '切換為深色模式');
+  }
+  let saved = 'dark';
+  try { saved = localStorage.getItem('xiangqi-theme') || 'dark'; } catch (_) {}
+  applyTheme(saved === 'light' ? 'light' : 'dark');
+  button.addEventListener('click', function () {
+    const next = document.body.classList.contains('dark-mode') ? 'light' : 'dark';
+    applyTheme(next);
+    try { localStorage.setItem('xiangqi-theme', next); } catch (_) {}
+  });
+})();
+</script>
+<script type="module" src="js/home.js?v=20261025-tutorial-v8"></script>
 </body></html>

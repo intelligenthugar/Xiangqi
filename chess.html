@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="zh-TW"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"><title>中國象棋</title><link rel="stylesheet" href="css/style.css?v=20261025-rematch-5"></head>
+<html lang="zh-TW"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"><title>中國象棋</title><link rel="stylesheet" href="css/style.css?v=20261025-tutorial-v8"></head>
 <body class="dark-mode">
 <header class="topbar game-topbar"><a class="btn-home button-link" href="index.html">🏠 首頁</a><strong id="header-title">🪨 中國象棋（傳統大棋盤）</strong><div class="top-actions"><button class="btn-theme" id="theme-btn" type="button">☀️ 淺色</button></div></header>
 <main class="game-view">
@@ -27,5 +27,24 @@
 <div class="modal" id="win-modal" hidden><div class="modal-content"><button class="modal-close" id="close-win" aria-label="關閉">×</button><h2 id="win-modal-title">🏆 遊戲結束！</h2><p id="winner-message"></p><div id="winner-reason" class="reason-box"></div><p id="rematch-status" aria-live="polite"></p><div class="rematch-actions"><button id="rematch-request-btn" type="button">詢問對方再玩一局</button><button id="rematch-accept-btn" type="button" hidden>同意，再玩一局</button><button id="rematch-decline-btn" type="button" class="btn-danger" hidden>不玩了，關閉房間</button><button id="confirm-win">確定</button></div></div></div>
 <div class="modal" id="confirm-modal" hidden><div class="modal-content"><p id="confirm-message"></p><div class="modal-buttons"><button class="secondary-btn" id="cancel-confirm">取消</button><button id="accept-confirm">確定</button></div></div></div>
 <footer>Copyright © 2026 · Xiangqi</footer>
-<script type="module" src="js/chess.js?v=20261025-rematch-5"></script>
+<script>
+(function () {
+  const button = document.getElementById('theme-btn');
+  if (!button) return;
+  function applyTheme(theme) {
+    document.body.classList.toggle('dark-mode', theme === 'dark');
+    button.textContent = theme === 'dark' ? '☀️ 淺色' : '🌙 深色';
+    button.setAttribute('aria-label', theme === 'dark' ? '切換為淺色模式' : '切換為深色模式');
+  }
+  let saved = 'dark';
+  try { saved = localStorage.getItem('xiangqi-theme') || 'dark'; } catch (_) {}
+  applyTheme(saved === 'light' ? 'light' : 'dark');
+  button.addEventListener('click', function () {
+    const next = document.body.classList.contains('dark-mode') ? 'light' : 'dark';
+    applyTheme(next);
+    try { localStorage.setItem('xiangqi-theme', next); } catch (_) {}
+  });
+})();
+</script>
+<script type="module" src="js/chess.js?v=20261025-tutorial-v8"></script>
 </body></html>
