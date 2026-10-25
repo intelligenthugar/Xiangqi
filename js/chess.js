@@ -94,6 +94,9 @@ async function connectFirebase(){
     ]);
     firebaseApi={...appMod,...authMod,...dbMod};
     app=firebaseApi.initializeApp(firebaseConfig);auth=firebaseApi.getAuth(app);db=firebaseApi.getDatabase(app);
+    // 優先使用本機持久登入，降低 iPhone 關閉瀏覽器後匿名 UID 改變的機率。
+    // 若瀏覽器是私人瀏覽或使用者清除了網站資料，仍可能無法恢復原 UID。
+    try{await firebaseApi.setPersistence(auth,firebaseApi.browserLocalPersistence)}catch(persistenceError){console.warn('無法設定本機登入持久性，沿用 Firebase 預設設定',persistenceError)}
     // 先等待 Firebase 還原原本的匿名登入；不要每次重整都重新建立匿名帳號，否則無法認回原房間。
     let unsubscribeAuth;
     const existingUser=await new Promise(resolve=>{unsubscribeAuth=firebaseApi.onAuthStateChanged(auth,u=>{unsubscribeAuth?.();resolve(u)});});
@@ -411,25 +414,21 @@ function enterRoom(code){
     }
   },error=>console.warn('房間通知讀取失敗',error));
 
-  // 這個原型採用「任何一位玩家斷線就結束房間」的清理方式，
-  // 因此重新整理、關閉分頁或網路中斷時，Firebase 會刪除房間與公開列表索引。
-  // 注意：重新整理會結束該局，不再保留跨重新整理的對局。
+  // 重要：玩家離線時絕不能刪除整個房間或公開列表。iPhone 關閉 Safari、切換網路、
+  // 短暫斷線都會觸發 onDisconnect；只更新自己的 presence，保留棋盤與房間供對手重連／觀戰。
   const myPresenceRef=ref(db,`rooms/${code}/presence/${myColor}`);
-  const roomRefForDisconnect=ref(db,`rooms/${code}`);
-  const publicRefForDisconnect=ref(db,`publicRooms/${code}`);
   onValue(ref(db,'.info/connected'),async snap=>{
     if(snap.val()!==true||!user||!myColor||roomCode!==code)return;
     try{
-      // 先向 Firebase 伺服器登記斷線操作，再標記在線。
-      const publicRoomSnapshot = await get(publicRefForDisconnect);
-      if(publicRoomSnapshot.exists()) await onDisconnect(publicRefForDisconnect).remove();
-      await onDisconnect(roomRefForDisconnect).remove();
+      // 清掉目前連線上可能殘留的舊版「斷線刪除整個房間」設定，絕不再讓斷線刪除房間。
+      await onDisconnect(ref(db,`rooms/${code}`)).cancel();
+      await onDisconnect(ref(db,`publicRooms/${code}`)).cancel();
       await onDisconnect(myPresenceRef).set({online:false,lastSeen:Date.now(),uid:user.uid});
       await set(myPresenceRef,{online:true,lastSeen:Date.now(),uid:user.uid});
     }catch(error){
-      console.error('設定離線清理／在線狀態失敗',error);
+      console.error('設定離線狀態失敗',error);
       const el=$('opponent-presence');
-      if(el)el.textContent='⚠️ 離線清理設定失敗，請檢查 Firebase Rules';
+      if(el)el.textContent='⚠️ 離線狀態更新失敗，請檢查 Firebase Rules';
     }
   });
 }
