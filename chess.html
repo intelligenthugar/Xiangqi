@@ -1,7 +1,7 @@
 <!DOCTYPE html>
-<html lang="zh-TW"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"><title>中國象棋</title><link rel="stylesheet" href="css/style.css?v=20261025-room-exit-1"></head>
+<html lang="zh-TW"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"><title>中國象棋</title><link rel="stylesheet" href="css/style.css?v=20261025-rematch-5"></head>
 <body class="dark-mode">
-<header class="topbar game-topbar"><a class="btn-home button-link" href="index.html">🏠 首頁</a><strong id="header-title">🪨 中國象棋（傳統大棋盤）</strong><div class="top-actions"><button class="btn-lang" id="lang-btn" onclick="toggleLanguage()">English</button><button class="btn-theme" id="theme-btn" onclick="toggleDarkMode()">☀️ 淺色</button></div></header>
+<header class="topbar game-topbar"><a class="btn-home button-link" href="index.html">🏠 首頁</a><strong id="header-title">🪨 中國象棋（傳統大棋盤）</strong><div class="top-actions"><button class="btn-lang" id="lang-btn" type="button">English</button><button class="btn-theme" id="theme-btn" onclick="toggleDarkMode()">☀️ 淺色</button></div></header>
 <main class="game-view">
 <section id="online-panel" class="online-panel" hidden>
   <h2>🌐 多人連線</h2><p id="online-status" role="status" aria-live="polite">正在連接 Firebase…</p><p class="small muted">建立房間後，把顯示的 6 碼代碼傳給朋友；對方輸入代碼後即可加入。</p>
@@ -22,10 +22,10 @@
 <div class="controls"><span id="chess-mode-title">傳統象棋</span><select id="chess-game-mode"><option value="pve">單人對戰 (AI)</option><option value="pvp">雙人對戰（同裝置）</option></select><select id="chess-ai-level"><option value="easy">AI: 初級</option><option value="hard" selected>AI: 高級 (Minimax)</option></select><button id="restart-btn">重來</button></div>
 <div id="chess-ai-score-container" class="score-board"><span>🤖 象棋 AI 戰績：</span><span class="win">勝: <b id="chess-stat-win">0</b></span><span class="loss">敗: <b id="chess-stat-loss">0</b></span><span class="draw">和: <b id="chess-stat-draw">0</b></span><button id="reset-stats-btn" class="btn-danger tiny">重置</button></div>
 <div id="chess-status" class="status">準備開始…</div>
-<div class="chess-container"><div class="couplet-couplet">觀棋不語真君子</div><div class="chess-wrapper"><div id="check-banner" class="check-banner">⚠️ 將軍！CHECK!</div><div id="coin-overlay" class="coin-overlay"><div class="coin-container"><div id="coin" class="coin"><div class="coin-face front">紅</div><div class="coin-face back">黑</div></div></div><div id="coin-text-tip" class="coin-text-tip">🪙 擲硬幣決定先手...</div></div><div class="chess-board" id="chess-board"></div></div><div class="couplet-couplet">棋手無回大丈夫</div></div>
+<div class="chess-container"><div class="couplet-couplet">觀棋不語真君子</div><div class="chess-wrapper"><div id="check-banner" class="check-banner">⚠️ 將軍 CHECK！點一下這個提示可關閉</div><div id="coin-overlay" class="coin-overlay"><div class="coin-container"><div id="coin" class="coin"><div class="coin-face front">紅</div><div class="coin-face back">黑</div></div></div><div id="coin-text-tip" class="coin-text-tip">🪙 擲硬幣決定先手...</div></div><div class="chess-board" id="chess-board"></div></div><div class="couplet-couplet">棋手無回大丈夫</div></div>
 </main>
-<div class="modal" id="win-modal" hidden><div class="modal-content"><button class="modal-close" id="close-win">×</button><h2>🏆 遊戲結束！</h2><p id="winner-message"></p><div id="winner-reason" class="reason-box"></div><button id="confirm-win">確定</button></div></div>
+<div class="modal" id="win-modal" hidden><div class="modal-content"><button class="modal-close" id="close-win" aria-label="關閉">×</button><h2 id="win-modal-title">🏆 遊戲結束！</h2><p id="winner-message"></p><div id="winner-reason" class="reason-box"></div><p id="rematch-status" aria-live="polite"></p><div class="rematch-actions"><button id="rematch-request-btn" type="button">詢問對方再玩一局</button><button id="rematch-accept-btn" type="button" hidden>同意，再玩一局</button><button id="rematch-decline-btn" type="button" class="btn-danger" hidden>不玩了，關閉房間</button><button id="confirm-win">確定</button></div></div></div>
 <div class="modal" id="confirm-modal" hidden><div class="modal-content"><p id="confirm-message"></p><div class="modal-buttons"><button class="secondary-btn" id="cancel-confirm">取消</button><button id="accept-confirm">確定</button></div></div></div>
 <footer>Copyright © 2026 · Xiangqi</footer>
-<script type="module" src="js/chess.js?v=20261025-notice-admin-2"></script>
+<script type="module" src="js/chess.js?v=20261025-rematch-5"></script>
 </body></html>

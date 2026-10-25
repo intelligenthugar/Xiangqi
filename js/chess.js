@@ -2,7 +2,8 @@ import { firebaseConfig } from './firebase-config.js';
 
 const $=id=>document.getElementById(id);const params=new URLSearchParams(location.search);let onlineMode=params.get('mode')==='online';let inviteRoomCode=(params.get('room')||'').trim().toUpperCase();let autoJoinAttempted=false;
 let app=null,auth=null,db=null,user=null,roomCode=null,myColor=null,roomUnsubscribe=null,onlineReady=false,applyingRemote=false;
-let firebaseApi=null,publicRoomsUnsubscribe=null,roomNoticeUnsubscribe=null,onlinePublicRoomsCache=[],lastRoomNoticeId='';
+let firebaseApi=null,publicRoomsUnsubscribe=null,roomNoticeUnsubscribe=null,onlinePublicRoomsCache=[],lastRoomNoticeId='',lastSeenMoveCount=-1,rematchResetStarted=false,rematchPromptOpen=false;
+let currentPlayerNames={red:'紅方',black:'黑方'};
 let chessPieces=[],chessSelectedIdx=-1,chessValidMoves=[],chessDangerMoves=[],chessTurn='red',chessGameMode='pve',currentAiLevel='hard',chessGameOver=false,isTossingCoin=false,isBannerDismissed=false,lastMove=null,moveHistory=[];
 let chessStats=JSON.parse(localStorage.getItem('chess_ai_stats')||'null')||{wins:0,losses:0,draws:0};const pieceValues={'帥':10000,'將':10000,'俥':90,'車':90,'炮':45,'包':45,'傌':40,'馬':40,'相':20,'象':20,'仕':20,'士':20,'兵':10,'卒':10};
 function setStatus(s){$('chess-status').textContent=s}
@@ -17,10 +18,67 @@ function isCheck(board,color){const king=board.findIndex(p=>p?.name===(color==='
 function legalMovesFrom(from,board=chessPieces){const piece=board[from],valid=[],danger=[];if(!piece)return{valid,danger};for(let to=0;to<90;to++){if(!canMove(from,to,board))continue;const src=board[from],dst=board[to];board[to]=src;board[from]=null;const bad=isKingsFacing(board)||isCheck(board,piece.color);board[from]=src;board[to]=dst;(bad?danger:valid).push(to)}return{valid,danger}}
 function allLegalMoves(board,color){const out=[];for(let from=0;from<90;from++)if(board[from]?.color===color){for(const to of legalMovesFrom(from,board).valid)out.push({from,to})}return out}
 function renderBoard(){const root=$('chess-board');root.innerHTML='';root.className='chess-board'+(chessGameMode==='pvp'?' pvp-mode':'')+(onlineMode&&myColor==='black'?' online-black-view':'');const svgNS='http://www.w3.org/2000/svg',svg=document.createElementNS(svgNS,'svg');svg.setAttribute('class','full-board-svg');svg.setAttribute('viewBox','0 0 360 400');let lines='';const cw=40,ch=40,ox=20,oy=20;lines+=`<rect x="18" y="18" width="324" height="364" stroke="#704214" stroke-width="2" fill="none"/>`;for(let r=0;r<10;r++)lines+=`<line x1="20" y1="${20+r*40}" x2="340" y2="${20+r*40}" stroke="#704214" stroke-width="1.5"/>`;for(let c=0;c<9;c++){if(c===0||c===8)lines+=`<line x1="${20+c*40}" y1="20" x2="${20+c*40}" y2="380" stroke="#704214" stroke-width="1.5"/>`;else{lines+=`<line x1="${20+c*40}" y1="20" x2="${20+c*40}" y2="180" stroke="#704214" stroke-width="1.5"/><line x1="${20+c*40}" y1="220" x2="${20+c*40}" y2="380" stroke="#704214" stroke-width="1.5"`+' />'}}lines+=`<text x="92" y="211" font-size="22" fill="#704214" font-weight="bold" font-family="KaiTi, 標楷體">楚 河</text><text x="228" y="211" font-size="22" fill="#704214" font-weight="bold" font-family="KaiTi, 標楷體">漢 界</text><line x1="140" y1="20" x2="220" y2="100" stroke="#704214"/><line x1="220" y1="20" x2="140" y2="100" stroke="#704214"/><line x1="140" y1="300" x2="220" y2="380" stroke="#704214"/><line x1="220" y1="300" x2="140" y2="380" stroke="#704214"/>`;svg.innerHTML=lines;root.appendChild(svg);const overlay=document.createElement('div');overlay.className='full-board-interactive';for(let i=0;i<90;i++){const cell=document.createElement('div');let cls='chess-cell';if(chessSelectedIdx===i)cls+=' selected';if(lastMove&&(lastMove.from===i||lastMove.to===i))cls+=' last-move';if(chessValidMoves.includes(i))cls+=chessPieces[i]?' valid-capture':' valid-move';if(chessDangerMoves.includes(i))cls+=chessPieces[i]?' invalid-danger-capture':' invalid-danger-move';cell.className=cls;cell.onclick=()=>handleClick(i);const p=chessPieces[i];if(p){const el=document.createElement('div');el.className='chess-piece '+p.color;el.textContent=p.name;el.setAttribute('aria-label',`${p.color==='red'?'紅方':'黑方'}${p.name}`);el.title=el.getAttribute('aria-label');cell.appendChild(el)}overlay.appendChild(cell)}root.appendChild(overlay)}
-function updateStatus(){if(chessGameOver||isTossingCoin)return;const check=isCheck(chessPieces,chessTurn);$('check-banner').classList.toggle('show',check&&!isBannerDismissed);$('chess-status').classList.toggle('status-in-check',check);if(check)setStatus(`⚡ ${chessTurn==='red'?'🔴 紅方':'⚫ 黑方'} 被「將軍」！請儘快應將`);else setStatus(`輪到 ${chessTurn==='red'?'🔴 紅方':'⚫ 黑方'} 行棋${onlineMode&&myColor!==chessTurn?'（等待對方）':''}`)}
+function updateStatus(){if(chessGameOver||isTossingCoin)return;const check=isCheck(chessPieces,chessTurn);const isTargetPlayerBoard=!onlineMode||(onlineReady&&myColor===chessTurn);const showCheck=check&&isTargetPlayerBoard&&!isBannerDismissed;$('check-banner').classList.toggle('show',showCheck);$('chess-status').classList.toggle('status-in-check',check&&isTargetPlayerBoard);if(check&&isTargetPlayerBoard)setStatus(`⚡ ${chessTurn==='red'?'🔴 紅方':'⚫ 黑方'} 被將軍！請儘快應將`);else setStatus(`輪到 ${chessTurn==='red'?'🔴 紅方':'⚫ 黑方'} 行棋${onlineMode&&myColor!==chessTurn?'（等待對方）':''}`)}
+function getSideName(color){if(onlineMode)return currentPlayerNames[color]|| (color==='red'?'紅方':'黑方');if(chessGameMode==='pve')return color==='red'?'你':'AI';return color==='red'?'紅方':'黑方'}
+function winnerMessage(winner){const loser=winner==='red'?'black':'red';return `${getSideName(winner)} 打敗了 ${getSideName(loser)}`}
 function handleClick(idx){if(chessGameOver||isTossingCoin||applyingRemote)return;if(onlineMode&&(!onlineReady||myColor!==chessTurn)){setStatus(myColor?'現在是對方的回合':'請先建立或加入房間');return}if(!onlineMode&&chessGameMode==='pve'&&chessTurn==='black')return;const p=chessPieces[idx];if(p?.color===chessTurn){chessSelectedIdx=idx;const m=legalMovesFrom(idx);chessValidMoves=m.valid;chessDangerMoves=m.danger;renderBoard();return}if(chessSelectedIdx>=0&&chessValidMoves.includes(idx)){const from=chessSelectedIdx;const move={from,to:idx,movedPiece:chessPieces[from],capturedPiece:chessPieces[idx],turn:chessTurn};applyMoveLocal(move);if(onlineMode)sendMove();else if(!chessGameOver&&chessGameMode==='pve'&&chessTurn==='black')aiTurn()}}
-function applyMoveLocal(m){moveHistory.push({from:m.from,to:m.to,movedPiece:chessPieces[m.from],capturedPiece:chessPieces[m.to],turn:chessTurn});chessPieces[m.to]=chessPieces[m.from];chessPieces[m.from]=null;lastMove={from:m.from,to:m.to};chessSelectedIdx=-1;chessValidMoves=[];chessDangerMoves=[];renderBoard();const winner=chessPieces.some(p=>p?.name==='帥')?(chessPieces.some(p=>p?.name==='將')?null:'red'):'black';if(winner){finishGame(winner,'主帥已被吃掉！');return}chessTurn=chessTurn==='red'?'black':'red';updateStatus();const moves=allLegalMoves(chessPieces,chessTurn);if(!moves.length){finishGame(chessTurn==='red'?'black':'red',isCheck(chessPieces,chessTurn)?'將死！':'困斃！')}}
-function finishGame(winner,reason){chessGameOver=true;$('check-banner').classList.remove('show');$('winner-message').textContent=`${winner==='red'?'🔴 紅方':'⚫ 黑方'}獲勝！`;$('winner-reason').textContent=reason;if(!onlineMode&&chessGameMode==='pve'){if(winner==='red')chessStats.wins++;else chessStats.losses++;updateStats()}showModal('win-modal');if(onlineMode&&roomCode)update(ref(db,`rooms/${roomCode}`),{status:'finished',winner,reason,board:chessPieces,turn:chessTurn}).catch(console.error)}
+function applyMoveLocal(m){moveHistory.push({from:m.from,to:m.to,movedPiece:chessPieces[m.from],capturedPiece:chessPieces[m.to],turn:chessTurn});chessPieces[m.to]=chessPieces[m.from];chessPieces[m.from]=null;lastMove={from:m.from,to:m.to};isBannerDismissed=false;chessSelectedIdx=-1;chessValidMoves=[];chessDangerMoves=[];renderBoard();const winner=chessPieces.some(p=>p?.name==='帥')?(chessPieces.some(p=>p?.name==='將')?null:'red'):'black';if(winner){finishGame(winner,'主帥已被吃掉！');return}chessTurn=chessTurn==='red'?'black':'red';updateStatus();const moves=allLegalMoves(chessPieces,chessTurn);if(!moves.length){finishGame(chessTurn==='red'?'black':'red',isCheck(chessPieces,chessTurn)?'將死！':'困斃！')}}
+function configureFinishedModal(mode='finished'){
+  const online=onlineMode&&!!roomCode;
+  $('rematch-request-btn').hidden=!online||mode!=='finished';
+  $('rematch-accept-btn').hidden=!online||mode!=='incoming';
+  $('rematch-decline-btn').hidden=!online||!['finished','incoming','waiting'].includes(mode);
+  $('confirm-win').hidden=online;
+  $('rematch-status').textContent='';
+  if(mode==='incoming')$('rematch-status').textContent=`${currentPlayerNames[myColor==='red'?'black':'red']||'對手'} 想再玩一局，是否同意？`;
+  else if(mode==='waiting')$('rematch-status').textContent='已送出再玩一局的邀請，正在等待對方回覆…';
+  else if(online)$('rematch-status').textContent='要再玩一局嗎？若任何一方不繼續，房間就會關閉。';
+}
+function finishGame(winner,reason){chessGameOver=true;$('check-banner').classList.remove('show');$('winner-message').textContent=winnerMessage(winner);$('winner-reason').textContent=reason;if(!onlineMode&&chessGameMode==='pve'){if(winner==='red')chessStats.wins++;else chessStats.losses++;updateStats()}configureFinishedModal('finished');showModal('win-modal');if(onlineMode&&roomCode)update(ref(db,`rooms/${roomCode}`),{status:'finished',winner,reason,winnerName:getSideName(winner),loserName:getSideName(winner==='red'?'black':'red'),board:chessPieces,turn:chessTurn}).catch(console.error)}
+async function publishRoomNotice(type,extra={}){
+  if(!roomCode||!db||!user)throw new Error('目前沒有有效的連線房間');
+  const code=roomCode;
+  await set(ref(db,`roomNotices/${code}`),{id:`${user.uid}_${type}_${Date.now()}`,type,senderUid:user.uid,senderColor:myColor,senderName:currentPlayerNames[myColor]||getSideName(myColor),createdAt:Date.now(),...extra});
+}
+async function requestRematch(){
+  if(!roomCode||!user)return;
+  try{await publishRoomNotice('rematch-request');configureFinishedModal('waiting');$('rematch-status').textContent='已送出再玩一局的邀請，正在等待對方回覆…';}
+  catch(e){showRoomAlert('邀請失敗',`無法送出再玩一局的邀請：${e.message}`)}
+}
+async function acceptRematch(){
+  if(!roomCode||!user)return;
+  try{await publishRoomNotice('rematch-agreed');$('rematch-status').textContent='雙方同意再玩一局，正在重設棋盤…';await resetRoomForRematch();}
+  catch(e){showRoomAlert('重新開始失敗',`無法重新開始：${e.message}`)}
+}
+async function resetRoomForRematch(){
+  if(rematchResetStarted||!roomCode||!db||!user)return;
+  rematchResetStarted=true;
+  try{
+    const code=roomCode;const snap=await get(ref(db,`rooms/${code}`));
+    if(!snap.exists()){exitRoomLocally('房間已關閉，已返回連線大廳。');return}
+    const room=snap.val();
+    // 現有 Rules 只允許輪到自己的玩家更新房間；因此由 room.turn 對應的玩家負責重開。
+    if(room.players?.[room.turn]!==user.uid){rematchResetStarted=false;return}
+    await update(ref(db,`rooms/${code}`),{status:'playing',winner:null,reason:null,winnerName:null,loserName:null,board:initialBoard(),turn:'red',lastMove:null,moveCount:0});
+    await set(ref(db,`roomNotices/${code}`),{id:`${user.uid}_rematch-started_${Date.now()}`,type:'rematch-started',senderUid:user.uid,createdAt:Date.now()});
+    chessPieces=initialBoard();chessTurn='red';chessGameOver=false;chessSelectedIdx=-1;chessValidMoves=[];chessDangerMoves=[];lastMove=null;moveHistory=[];isBannerDismissed=false;lastSeenMoveCount=0;
+    hideModal('win-modal');renderBoard();updateStatus();$('room-waiting').textContent='新的一局開始！';
+  }catch(e){rematchResetStarted=false;throw e}
+}
+async function declineRematch(){
+  if(!roomCode||!db||!user){hideModal('win-modal');return}
+  const code=roomCode;
+  try{await publishRoomNotice('rematch-declined');await closeFinishedRoom(code,'雙方結束對局，房間已關閉。');}
+  catch(e){showRoomAlert('關閉房間失敗',`無法關閉房間：${e.message}`)}
+}
+async function closeFinishedRoom(code=roomCode,message='房間已關閉。'){
+  if(!code||!db)return;
+  try{
+    const snap=await get(ref(db,`rooms/${code}`));const room=snap.val();
+    if(room?.settings?.visibility==='public')await remove(ref(db,`publicRooms/${code}`)).catch(()=>{});
+    if(snap.exists())await remove(ref(db,`rooms/${code}`));
+  }finally{hideModal('win-modal');exitRoomLocally(message);onlineMode=true;rematchResetStarted=false;}
+}
 function updateStats(){ $('chess-stat-win').textContent=chessStats.wins;$('chess-stat-loss').textContent=chessStats.losses;$('chess-stat-draw').textContent=chessStats.draws;localStorage.setItem('chess_ai_stats',JSON.stringify(chessStats))}
 function evaluate(board){let s=0;for(let i=0;i<90;i++){const p=board[i];if(!p)continue;let v=pieceValues[p.name]||10,r=Math.floor(i/9),c=i%9;if(p.type==='兵'&&r<=4)v+=(5-r)*5;if(p.type==='卒'&&r>=5)v+=(r-4)*5;if(['車','俥'].includes(p.type)&&c===4)v+=10;s+=p.color==='black'?v:-v}return s}
 function minimax(board,depth,alpha,beta,maximizing){if(depth===0)return evaluate(board);const color=maximizing?'black':'red',moves=allLegalMoves(board,color);if(!moves.length)return maximizing?-99999:99999;let best=maximizing?-Infinity:Infinity;for(const m of moves){const a=board[m.from],d=board[m.to];board[m.to]=a;board[m.from]=null;const score=minimax(board,depth-1,alpha,beta,!maximizing);board[m.from]=a;board[m.to]=d;if(maximizing){best=Math.max(best,score);alpha=Math.max(alpha,score)}else{best=Math.min(best,score);beta=Math.min(beta,score)}if(beta<=alpha)break}return best}
@@ -290,6 +348,7 @@ function enterRoom(code){
     else if(room.players?.black===user.uid)myColor='black';
     else{setStatus('你不是此房間的玩家');onlineReady=false;return;}
 
+    currentPlayerNames={red:room.playerNames?.red||'紅方',black:room.playerNames?.black||'黑方'};
     const ownName=room.playerNames?.[myColor]||localStorage.getItem('xiangqi-nickname')||'棋手';
     const otherColor=myColor==='red'?'black':'red';
     const otherLabel=otherColor==='red'?'紅方':'黑方';
@@ -313,14 +372,17 @@ function enterRoom(code){
     else if(room.status==='closed')$('room-waiting').textContent='房間已關閉';
     if(room.board){
       applyingRemote=true;
+      const moveCount=Number(room.moveCount||0);
+      if(moveCount!==lastSeenMoveCount){isBannerDismissed=false;lastSeenMoveCount=moveCount;}
       chessPieces=Array.from({length:90},(_,i)=>room.board?.[i]??null);
       chessTurn=room.turn||'red';lastMove=room.lastMove||null;
       chessGameOver=room.status==='finished';chessSelectedIdx=-1;chessValidMoves=[];chessDangerMoves=[];
       renderBoard();updateStatus();applyingRemote=false;
     }
     if(room.status==='finished'&&room.winner&&$('win-modal').hidden){
-      $('winner-message').textContent=`${room.winner==='red'?'紅方':'黑方'}獲勝`;
-      $('winner-reason').textContent=room.reason||'';showModal('win-modal');
+      currentPlayerNames={red:room.playerNames?.red||'紅方',black:room.playerNames?.black||'黑方'};
+      $('winner-message').textContent=room.winnerName&&room.loserName?`${room.winnerName} 打敗了 ${room.loserName}`:winnerMessage(room.winner);
+      $('winner-reason').textContent=room.reason||'';configureFinishedModal('finished');showModal('win-modal');
     }
   },error=>{
     console.error('房間即時監聽失敗',error);
@@ -329,15 +391,23 @@ function enterRoom(code){
   if(roomNoticeUnsubscribe){roomNoticeUnsubscribe();roomNoticeUnsubscribe=null;}
   roomNoticeUnsubscribe=onValue(ref(db,`roomNotices/${code}`),snap=>{
     const notice=snap.val();
-    if(!notice||notice.senderUid===user?.uid||notice.id===lastRoomNoticeId)return;
+    if(!notice||notice.id===lastRoomNoticeId)return;
     lastRoomNoticeId=notice.id||'';
-    if(notice.type==='player-left'){
+    if(notice.type==='player-left'&&notice.senderUid!==user?.uid){
       const name=notice.senderName||'對手';
       window.alert(`對手已離開房間\n\n${name} 已離開，本局結束。你將返回連線大廳。`);
       exitRoomLocally(`${name} 已離開，本局結束。你已返回連線大廳。`);
-      onlineMode=true;
-      chessGameOver=true;chessSelectedIdx=-1;chessValidMoves=[];chessDangerMoves=[];
-      renderBoard();
+      onlineMode=true;chessGameOver=true;chessSelectedIdx=-1;chessValidMoves=[];chessDangerMoves=[];renderBoard();
+    }else if(notice.type==='rematch-request'&&notice.senderUid!==user?.uid&&chessGameOver){
+      rematchPromptOpen=true;configureFinishedModal('incoming');showModal('win-modal');
+    }else if(notice.type==='rematch-agreed'){
+      rematchPromptOpen=false;
+      $('rematch-status').textContent='對方同意再玩一局，正在準備新棋盤…';
+      resetRoomForRematch().catch(e=>showRoomAlert('重新開始失敗',`無法重新開始：${e.message}`));
+    }else if(notice.type==='rematch-declined'){
+      if(notice.senderUid!==user?.uid){window.alert('對方不再繼續對局，房間即將關閉。');closeFinishedRoom(code,'對局已結束，房間已關閉。').catch(console.error);}
+    }else if(notice.type==='rematch-started'){
+      chessPieces=initialBoard();chessTurn='red';chessGameOver=false;chessSelectedIdx=-1;chessValidMoves=[];chessDangerMoves=[];lastMove=null;moveHistory=[];isBannerDismissed=false;lastSeenMoveCount=0;rematchResetStarted=false;hideModal('win-modal');renderBoard();updateStatus();$('room-waiting').textContent='新的一局開始！';
     }
   },error=>console.warn('房間通知讀取失敗',error));
 
@@ -402,7 +472,70 @@ if($('player-nickname')){$('player-nickname').value=localStorage.getItem('xiangq
 if($('room-code-input'))$('room-code-input').addEventListener('input',e=>{e.target.value=e.target.value.toUpperCase().replace(/[^A-HJ-NP-Z2-9]/g,'').slice(0,6)});
 $('copy-room-btn').addEventListener('click',async()=>{if(!roomCode)return;try{await copyText(roomCode);$('room-waiting').textContent='✅ 已複製房間代碼！傳給朋友即可加入。'}catch{$('room-waiting').textContent=`複製失敗，請手動複製代碼：${roomCode}`}});
 $('copy-invite-btn').addEventListener('click',async()=>{if(!roomCode)return;const url=makeInviteUrl(roomCode);try{await copyText(url);$('room-waiting').textContent='✅ 已複製邀請網址！傳給朋友，對方開啟後會自動嘗試加入。'}catch{$('room-waiting').textContent=`無法自動複製，請手動複製此網址：${url}`;window.prompt('請複製這個邀請網址：',url)}});
-$('chess-game-mode').addEventListener('change',()=>{if(onlineMode)return;initGame()});$('chess-ai-level').addEventListener('change',()=>{currentAiLevel=$('chess-ai-level').value});$('restart-btn').addEventListener('click',()=>{if(onlineMode){setStatus('多人模式的重新開始目前請建立新房間，避免兩端棋局不同步。');return}initGame()});$('reset-stats-btn').addEventListener('click',()=>{chessStats={wins:0,losses:0,draws:0};updateStats()});$('confirm-win').onclick=()=>hideModal('win-modal');$('close-win').onclick=()=>hideModal('win-modal');$('cancel-confirm').onclick=()=>hideModal('confirm-modal');$('accept-confirm').onclick=()=>hideModal('confirm-modal');$('check-banner').onclick=()=>{$('check-banner').classList.remove('show');isBannerDismissed=true};
+$('chess-game-mode').addEventListener('change',()=>{if(onlineMode)return;initGame()});$('chess-ai-level').addEventListener('change',()=>{currentAiLevel=$('chess-ai-level').value});$('restart-btn').addEventListener('click',()=>{if(onlineMode){if(chessGameOver)showModal('win-modal');else setStatus(english?'Restart is available after the game ends.':'連線對局中不能直接重來，請先結束本局。');return}initGame()});$('reset-stats-btn').addEventListener('click',()=>{chessStats={wins:0,losses:0,draws:0};updateStats()});$('confirm-win').onclick=()=>hideModal('win-modal');$('close-win').onclick=()=>{if(onlineMode&&roomCode)declineRematch();else hideModal('win-modal')};$('rematch-request-btn')?.addEventListener('click',requestRematch);$('rematch-accept-btn')?.addEventListener('click',acceptRematch);$('rematch-decline-btn')?.addEventListener('click',declineRematch);$('cancel-confirm').onclick=()=>hideModal('confirm-modal');$('accept-confirm').onclick=()=>hideModal('confirm-modal');$('check-banner').onclick=()=>{$('check-banner').classList.remove('show');isBannerDismissed=true};
 function toggleDarkMode(){document.body.classList.toggle('dark-mode');const d=document.body.classList.contains('dark-mode');$('theme-btn').textContent=d?'☀️ 淺色':'🌙 深色';localStorage.setItem('xiangqi-theme',d?'dark':'light')}
-let english=false;function toggleLanguage(){english=!english;$('lang-btn').textContent=english?'繁體中文':'English';$('header-title').textContent=english?'🪨 Xiangqi (Chinese Chess)':'🪨 中國象棋（傳統大棋盤）';$('chess-mode-title').textContent=english?'Xiangqi':'傳統象棋';$('restart-btn').textContent=english?'Restart':'重來';$('create-room-btn').textContent=english?'Create Room':'建立房間';$('join-room-btn').textContent=english?'Join Room':'加入房間';$('online-panel').querySelector('h2').textContent=english?'🌐 Online Multiplayer':'🌐 多人連線';}
+const LANG_KEY = 'xiangqi-language';
+let english = localStorage.getItem(LANG_KEY) === 'en';
+const textTranslations = {
+  '繁體中文':'繁體中文','English':'English','🪨 中國象棋':'🪨 Xiangqi','🪨 中國象棋（傳統大棋盤）':'🪨 Xiangqi (Traditional Board)','中國象棋｜多人連線大廳':'Xiangqi | Multiplayer Lobby','中國象棋':'Xiangqi',
+  '選擇你的對弈方式':'Choose How to Play','保留傳統棋盤風格，與 AI 或朋友一決勝負。':'Play Xiangqi against the AI or a friend.','單機版':'Single Player','與 AI 對弈，支援初級與高級難度。':'Play against AI with easy and hard difficulty.','開始遊戲 →':'Start Game →','多人連線':'Online Multiplayer','建立公開或私人房間，輸入房號與朋友即時對弈。':'Create a public or private room and play with a friend.','建立公開或私人房間，輸入房號與朋友即時對弈。':'Create a public or private room and play with a friend.','進入連線大廳 →':'Enter Lobby →','找到你上次的對局':'Your Previous Game','恢復上次對局':'Resume Previous Game','🌐 公開房間列表':'🌐 Public Rooms','顯示等待中的公開房間；私人房間不會列在這裡。':'Waiting public rooms are shown here. Private rooms are hidden.','重新整理':'Refresh','正在載入公開房間…':'Loading public rooms…','多人連線需要網路及 Firebase 設定。公開列表需在 Firebase Realtime Database Rules 加入本 ZIP 提供的 publicRooms 規則。':'Online play requires an internet connection and Firebase configuration. Add the publicRooms rule to your Firebase Realtime Database Rules to enable the public list.','🛡️ 管理員模式（原型）':'🛡️ Admin Mode (Prototype)','安全限制：這是純前端原型，密碼會出現在 JavaScript 中，不能當成真正的管理員驗證。此介面不會提供刪除房間功能。':'Security note: This is a front-end prototype. The password is visible in JavaScript and is not secure authentication. Room deletion is not available here.','管理員密碼':'Admin Password','輸入管理員密碼':'Enter admin password','登入管理介面':'Log In to Admin Panel','密碼錯誤。':'Incorrect password.','全部房間狀態（含私人房間）':'All Rooms (Including Private Rooms)','管理員列表會列出 rooms 節點中的公開與私人房間；目前只提供查看／加入，不提供刪除。注意：為了讓靜態網站列出全部房間，已登入的匿名使用者也能讀取房間清單；此原型不適合放置敏感資料。':'The admin list shows public and private rooms from the rooms node. You can view/join rooms but cannot delete them. To list all rooms on this static site, signed-in anonymous users can also read the room list. Do not store sensitive data in this prototype.','重新載入列表':'Reload List','目前沒有符合條件的公開房間。':'No public rooms match the current filter.','目前沒有房間（公開或私人）。':'There are no rooms (public or private).','等待加入':'Waiting for Player','對局中':'In Game','已結束':'Finished','已關閉':'Closed','公開房間':'Public Room','私人房間':'Private Room','房主：':'Host: ','建立：':'Created: ','人數：':'Players: ','需要密碼':'Password Required','無密碼':'No Password','不可加入':'Unavailable','輸入／加入':'Join','查看／加入':'View / Join','房間代碼：':'Room Code: ','房間類型':'Room Type','房間密碼（可留空）':'Room Password (Optional)','玩家暱稱':'Nickname','輸入暱稱（1～18 字）':'Enter nickname (1–18 characters)','公開房間（顯示在大廳）':'Public Room (Shown in Lobby)','私人房間（不公開）':'Private Room (Hidden from Lobby)','設定密碼；加入時需輸入':'Set a password; required to join','建立房間':'Create Room','加入房間':'Join Room','輸入 6 碼房間代碼':'Enter 6-character room code','暱稱只用於顯示。此原型的房間密碼是前端檢查，不能取代伺服器端安全驗證。':'Nicknames are for display only. Passwords are checked on the client and are not a substitute for server-side security.','📋 複製房間代碼':'📋 Copy Room Code','🔗 複製邀請網址':'🔗 Copy Invite Link','🚪 離開房間':'🚪 Leave Room','紅方：等待玩家　｜　黑方：等待玩家':'Red: Waiting　|　Black: Waiting','🟡 對手狀態：尚未確認':'🟡 Opponent: Not Confirmed','🏠 首頁':'🏠 Home','傳統象棋':'Xiangqi','傳統象棋（傳統大棋盤）':'Xiangqi (Traditional Board)','單人對戰 (AI)':'Single Player (AI)','雙人對戰（同裝置）':'Two Players (Same Device)','AI: 初級':'AI: Easy','AI: 高級 (Minimax)':'AI: Hard (Minimax)','重來':'Restart','🤖 象棋 AI 戰績：':'🤖 AI Stats: ','勝:':'Wins:','敗:':'Losses:','和:':'Draws:','重置':'Reset','準備開始…':'Ready to start…','⚠️ 將軍 CHECK！點一下這個提示可關閉':'⚠️ CHECK! Click this notice to dismiss','⚠️ 將軍！CHECK!':'⚠️ CHECK!','🏆 遊戲結束！':'🏆 Game Over!','確定':'OK','取消':'Cancel','多人連線對戰':'Online Match','🌐 多人連線':'🌐 Online Multiplayer','建立房間後，把顯示的 6 碼代碼傳給朋友；對方輸入代碼後即可加入。':'After creating a room, share the 6-character code with your friend. They can enter it to join.','點選等待中的房間即可加入；私人房間不會出現在這裡。':'Select a waiting room to join. Private rooms are not shown here.','正在連線…':'Connecting…','目前沒有等待中的公開房間。你可以建立公開房間，或輸入朋友提供的房號。':'No public rooms are waiting. You can create a public room or enter a friend’s room code.','等待黑方玩家加入…':'Waiting for Black to join…','對局進行中':'Game in progress','本局已結束':'This game has ended','房間已關閉':'Room closed','房間已建立，但未登上公開列表；請依 README 合併 publicRooms 規則。':'Room created, but it is not listed publicly. Merge the publicRooms rule into your Firebase Rules.','房間建立成功！請把代碼傳給朋友，等待黑方加入。':'Room created! Share the code with your friend and wait for Black to join.','已成功加入房間，開始對弈！':'Joined the room. The game is starting!','已重新連回你原本的座位。':'Reconnected to your previous seat.','你是紅方（先手）':'You are Red (first)','你是黑方（後手）':'You are Black (second)','⚡ 🔴 紅方 被將軍！請儘快應將':'⚡ 🔴 Red is in check! Respond to the check.','⚡ ⚫ 黑方 被將軍！請儘快應將':'⚡ ⚫ Black is in check! Respond to the check.','現在是對方的回合':'It is your opponent’s turn.','請先建立或加入房間':'Create or join a room first.','主帥已被吃掉！':'The general has been captured!','將死！':'Checkmate!','困斃！':'Stalemate!','勝方 打敗了 敗方':'Winner defeated loser','勝方獲勝！':'Winner wins!','請先編輯 js/firebase-config.js，填入 Firebase Console 的真實設定。':'Edit js/firebase-config.js and enter your Firebase Console configuration first.','Firebase 已連線（匿名玩家），可以建立或加入房間。':'Connected to Firebase (anonymous player). You can create or join a room.','房間代碼格式不正確，請向房主索取新連結。':'Invalid room code. Please ask the host for a new invite link.','房間密碼錯誤。':'Incorrect room password.','房間不存在或已結束。':'Room does not exist or has ended.','房間已滿。':'Room is full.','對手已離開房間':'Your opponent left the room','本局結束。你將返回連線大廳。':'The game has ended. You will return to the lobby.','已複製房間代碼！傳給朋友即可加入。':'Room code copied! Send it to your friend to join.','已複製邀請網址！傳給朋友，對方開啟後會自動嘗試加入。':'Invite link copied! Send it to your friend; opening it will attempt to join automatically.','公開列表規則尚未設定，房間目前無法顯示在大廳。':'Public-room rules are not configured, so the room cannot appear in the lobby.','正在建立…':'Creating…','正在加入…':'Joining…','正在通知對方…':'Notifying opponent…','你不是此房間的玩家':'You are not a player in this room','等待玩家':'Waiting for player','棋手':'Player','紅方':'Red','黑方':'Black','公開':'Public','私人':'Private','有':'Yes','無':'No','時間未知':'Unknown time','目前公開房間：':'Public rooms: ','間等待加入':' waiting','公開房間 ':'Public rooms ',' 間等待加入':' waiting','Firebase 尚未連線，無法載入公開房間。':'Firebase is not connected; public rooms cannot be loaded.','Firebase 尚未連線。':'Firebase is not connected.','讀取失敗：':'Read failed: ','載入失敗：':'Loading failed: ','同步失敗：':'Sync failed: ','房間同步失敗：':'Room sync failed: ','棋步未同步：可能已輪到對方或連線規則拒絕寫入':'Move not synced: it may be your opponent’s turn or Firebase Rules rejected the write.','多人模式的重新開始目前請建立新房間，避免兩端棋局不同步。':'To restart an online game, create a new room to avoid desynchronization.','對手狀態：尚未確認':'Opponent status: not confirmed','已離線':'Offline','在線上':'Online','尚未確認連線':'Connection not confirmed','請儘快應將':'Respond to the check','輪到 ':'Turn: ',' 行棋':' to move','（等待對方）':' (waiting for opponent)',' 打敗了 ':' defeated ','被將軍！':' is in check!','房間 ':'Room ',' 需要密碼，請輸入房主提供的密碼：':' requires a password. Enter the password from the host:','邀請網址中的房間代碼格式不正確，請向房主索取新連結。':'Invalid room code in invite link. Ask the host for a new link.','房間已建立！':'Room created!','請把代碼傳給朋友加入。':'Share the code with your friend to join.','你的角色：黑方（後手）':'Your role: Black (second)','房間建立成功！':'Room created!','你將返回連線大廳。':'You will return to the online lobby.','目前無法讀取公開房間；你仍可使用房號加入。':'Cannot load public rooms right now; you can still join using a room code.','尚未設定 Firebase；單機模式仍可使用。':'Firebase is not configured yet; single-player mode is still available.','公開列表需在 Firebase Realtime Database Rules 加入本 ZIP 提供的 publicRooms 規則。':'Add the publicRooms rule to Firebase Realtime Database Rules to enable the public list.','單機模式':'Single Player','連線大廳':'Online Lobby','你已返回連線大廳。':'You have returned to the online lobby.'
+};
+textTranslations['詢問對方再玩一局']='Ask for a rematch';
+textTranslations['同意，再玩一局']='Accept and play again';
+textTranslations['不玩了，關閉房間']='No rematch, close room';
+textTranslations['已送出再玩一局的邀請，正在等待對方回覆…']='Rematch request sent. Waiting for the opponent…';
+textTranslations['要再玩一局嗎？若任何一方不繼續，房間就會關閉。']='Play another round? The room closes if either player declines.';
+textTranslations['雙方同意再玩一局，正在重設棋盤…']='Both players agreed. Resetting the board…';
+textTranslations['對方同意再玩一局，正在準備新棋盤…']='Your opponent agreed. Preparing a new board…';
+textTranslations['新的一局開始！']='A new round has started!';
+textTranslations['對局已結束，房間已關閉。']='The match has ended and the room is closed.';
+textTranslations['對方不再繼續對局，房間即將關閉。']='Your opponent declined. The room will close.';
+textTranslations['想再玩一局，是否同意？']='wants a rematch. Do you agree?';
+const attributeTranslations = {
+  '輸入暱稱（1～18 字）':'Enter nickname (1–18 characters)','設定密碼；加入時需輸入':'Set a password; required to join','輸入 6 碼房間代碼':'Enter 6-character room code','輸入管理員密碼':'Enter admin password','管理員模式':'Admin mode','關閉':'Close'
+};
+function translateChinese(text){
+  if(textTranslations[text]!==undefined)return textTranslations[text];
+  let out=text;
+  const replacements=[
+    ['房間建立成功！','Room created!'],['加入房間成功！','Joined room!'],['房間代碼：','Room code: '],['玩家暱稱：','Nickname: '],['房間類型：','Room type: '],['密碼保護：','Password protection: '],['請把代碼傳給朋友加入。','Share the code with your friend to join.'],['等待黑方加入。','Waiting for Black to join.'],['已離開，本局結束。你已返回連線大廳。','left. The game has ended. You returned to the lobby.'],['已離開，本局結束。你將返回連線大廳。','left. The game has ended. You will return to the lobby.'],['已離開','left'],['正在加入房間','Joining room'],['正在加入公開房間','Joining public room'],['公開房間','Public room'],['等待加入','Waiting'],['建立成功','Created successfully'],['建立失敗','Failed to create'],['加入失敗','Failed to join'],['房間已滿','Room is full'],['房間不存在','Room not found'],['密碼錯誤','Incorrect password'],['紅方：','Red: '],['黑方：','Black: '],['房主：','Host: '],['建立：','Created: '],['人數：','Players: '],['你是紅方（先手）','You are Red (first)'],['你是黑方（後手）','You are Black (second)'],['紅方','Red'],['黑方','Black'],['等待玩家','Waiting for player'],['打敗了','defeated'],['將軍！','CHECK!'],['對局中','In game'],['已結束','Finished'],['私人','Private'],['公開','Public']
+  ];
+  for(const [from,to] of replacements)out=out.split(from).join(to);
+  return out;
+}
+const originalTextNodes = new WeakMap();
+const originalAttributes = new WeakMap();
+function applyLanguage(root=document){
+  const walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);
+  let node;
+  while((node=walker.nextNode())){
+    if(!originalTextNodes.has(node))originalTextNodes.set(node,node.nodeValue);
+    const original=originalTextNodes.get(node);
+    const next=english?translateChinese(original):original;
+    if(node.nodeValue!==next)node.nodeValue=next;
+  }
+  const elements = root.nodeType===Node.ELEMENT_NODE ? [root,...root.querySelectorAll('*')] : [...root.querySelectorAll('*')];
+  for(const el of elements){
+    for(const attr of ['placeholder','title','aria-label']){
+      if(!el.hasAttribute(attr))continue;
+      let saved=originalAttributes.get(el);if(!saved){saved={};originalAttributes.set(el,saved)}
+      if(saved[attr]===undefined)saved[attr]=el.getAttribute(attr);
+      const original=saved[attr];const next=english?(attributeTranslations[original]||translateChinese(original)):original;
+      if(el.getAttribute(attr)!==next)el.setAttribute(attr,next);
+    }
+  }
+  document.documentElement.lang=english?'en':'zh-TW';
+  const langButton=document.getElementById('lang-btn');if(langButton)langButton.textContent=english?'繁體中文':'English';
+}
+function toggleLanguage(){english=!english;localStorage.setItem(LANG_KEY,english?'en':'zh');applyLanguage();}
+document.getElementById('lang-btn')?.addEventListener('click',toggleLanguage);
+applyLanguage();
+const languageObserver=new MutationObserver(records=>{
+  for(const record of records){
+    if(record.type==='childList')record.addedNodes.forEach(n=>{if(n.nodeType===Node.TEXT_NODE){if(!originalTextNodes.has(n))originalTextNodes.set(n,n.nodeValue);if(english)n.nodeValue=translateChinese(originalTextNodes.get(n));}else if(n.nodeType===Node.ELEMENT_NODE)applyLanguage(n);});
+    else if(record.type==='characterData'&&record.target.nodeType===Node.TEXT_NODE){const n=record.target;if(!originalTextNodes.has(n))originalTextNodes.set(n,n.nodeValue);if(english){const next=translateChinese(originalTextNodes.get(n));if(n.nodeValue!==next)n.nodeValue=next;}}
+  }
+});
+languageObserver.observe(document.documentElement,{subtree:true,childList:true,characterData:true});
+
 if(localStorage.getItem('xiangqi-theme')==='light')document.body.classList.remove('dark-mode');$('theme-btn').textContent=document.body.classList.contains('dark-mode')?'☀️ 淺色':'🌙 深色';if(onlineMode){$('online-panel').hidden=false;$('chess-game-mode').value='pvp';$('chess-game-mode').querySelector('option[value="pvp"]').textContent='多人連線對戰';$('chess-game-mode').disabled=true;$('chess-mode-title').textContent='多人連線對戰';$('chess-ai-level').style.display='none';$('chess-ai-score-container').style.display='none'}initGame(onlineMode);updateStats();if(onlineMode)connectFirebase();
