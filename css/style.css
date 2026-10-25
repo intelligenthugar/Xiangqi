@@ -28,3 +28,31 @@
 /* 線上黑方視角：整個棋盤旋轉 180 度；棋子字樣依雙人模式既有設定保持黑方字樣正向。 */
 .chess-board.online-black-view{transform:rotate(180deg);}
 .chess-board.online-black-view .chess-cell.selected .chess-piece.black{transform:rotate(180deg) scale(1.18);}
+
+/* 2026-10-25 GitHub Pages prototype: room lobby, nickname, and admin limitations */
+.room-setup-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:12px 0}
+.room-setup-grid label{display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:700;text-align:left;color:var(--text-color)}
+.room-setup-grid input,.room-setup-grid select{width:100%;min-width:0}
+.room-password-label{grid-column:1/-1}
+#room-players-display{font-weight:700;line-height:1.6;overflow-wrap:anywhere}
+.public-lobby-panel{margin:24px 0 12px;padding:18px;text-align:left;background:var(--panel-bg);border:1px solid var(--border-color);border-radius:16px;box-shadow:0 8px 24px #0002}
+.public-lobby-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.public-lobby-heading h2{font-size:22px;margin:0 0 4px}
+.public-lobby-heading p{margin:0}
+.public-rooms-list{display:flex;flex-direction:column;gap:10px;margin-top:12px}
+.public-room-card{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px;border:1px solid var(--border-color);border-radius:10px;background:var(--bg-color);min-width:0}
+.public-room-main{display:flex;flex-direction:column;gap:4px;min-width:0;overflow-wrap:anywhere}
+.room-code{font-size:19px;letter-spacing:2px;color:#ffb74d}
+.room-status{font-size:12px;font-weight:700;color:#81c784}
+.room-join-link{display:inline-flex;align-items:center;justify-content:center;text-decoration:none;background:var(--primary-btn);color:white;padding:9px 12px;border-radius:7px;font-weight:700;white-space:nowrap}
+.admin-fab{position:fixed;right:20px;bottom:20px;width:54px;height:54px;border-radius:50%;font-size:24px;box-shadow:0 4px 18px #0007;z-index:900;display:flex;align-items:center;justify-content:center;background:#5e35b1;color:white;border:2px solid #b39ddb}
+.admin-fab:hover{background:#4527a0}
+.admin-modal-content{text-align:left;max-height:85vh;overflow:auto}
+.admin-modal-content h2{margin-top:4px;padding-right:24px}
+.admin-modal-content label{display:block;font-weight:700;margin:10px 0 6px}
+.admin-modal-content input{width:100%;margin-bottom:10px}
+.admin-warning{background:#ff98001a;border-left:4px solid #ff9800;padding:10px;border-radius:5px;line-height:1.55;font-size:13px}
+#admin-dashboard[hidden],#admin-login-area[hidden]{display:none}
+@media(max-width:600px){.room-setup-grid{grid-template-columns:1fr}.room-password-label{grid-column:auto}.public-room-card{align-items:flex-start;flex-direction:column}.public-room-card>div:last-child{width:100%}.room-join-link{width:100%}.admin-fab{right:14px;bottom:14px;width:50px;height:50px}.public-lobby-panel{padding:12px}}
+
+.resume-room-container{margin:0 auto 16px;padding:14px 18px;max-width:650px;border:1px solid #4caf50;border-radius:12px;background:var(--panel-bg);display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}.resume-room-container[hidden]{display:none}.resume-room-container p{margin:0;font-weight:700}

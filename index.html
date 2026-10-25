@@ -1,19 +1,36 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>中國象棋｜遊戲大廳</title>
-<link rel="stylesheet" href="css/style.css">
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#121212"><title>中國象棋｜多人連線大廳</title>
+<link rel="stylesheet" href="css/style.css?v=20261025-prototype-1">
 </head>
 <body class="dark-mode home-page">
-<header class="topbar"><h1>🪨 中國象棋</h1><div class="top-actions"><button class="btn-lang" id="lang-btn" onclick="toggleLanguage()">English</button><button class="btn-theme" id="theme-btn" onclick="toggleDarkMode()">☀️ 淺色</button></div></header>
+<header class="topbar"><h1>🪨 中國象棋</h1><div class="top-actions"><button class="btn-lang" id="lang-btn" type="button">繁體中文</button><button class="btn-theme" id="theme-btn" type="button">☀️ 淺色</button></div></header>
 <main class="lobby">
   <p class="eyebrow">XIANGQI · CHINESE CHESS</p><h2 id="lobby-title">選擇你的對弈方式</h2><p class="muted" id="lobby-subtitle">保留傳統棋盤風格，與 AI 或朋友一決勝負。</p>
   <section class="lobby-cards">
     <a class="mode-card" href="chess.html?mode=pve"><span class="card-icon">♟</span><h3 id="single-title">單機版</h3><p id="single-desc">與 AI 對弈，支援初級與高級難度。</p><span class="card-cta" id="single-cta">開始遊戲 →</span></a>
-    <a class="mode-card featured" href="chess.html?mode=online"><span class="card-icon">♟♟</span><h3 id="multi-title">多人連線</h3><p id="multi-desc">建立房間或輸入房間代碼，和朋友即時對弈。</p><span class="card-cta" id="multi-cta">進入連線大廳 →</span></a>
+    <a class="mode-card featured" href="chess.html?mode=online"><span class="card-icon">♟♟</span><h3 id="multi-title">多人連線</h3><p id="multi-desc">建立公開或私人房間，輸入房號與朋友即時對弈。</p><span class="card-cta" id="multi-cta">進入連線大廳 →</span></a>
   </section>
-  <p class="muted small">多人連線需要網路連線及 Firebase 設定。</p>
+  <div id="resume-room-container" class="resume-room-container" hidden><p>🎯 找到你上次的對局</p><a id="resume-room-link" class="room-join-link" href="chess.html?mode=online">恢復上次對局</a></div>
+  <section class="public-lobby-panel">
+    <div class="public-lobby-heading"><div><h2>🌐 公開房間列表</h2><p class="muted small">顯示等待中的公開房間；私人房間不會列在這裡。</p></div><button id="refresh-rooms-btn" class="secondary-btn" type="button">重新整理</button></div>
+    <p id="public-rooms-status" class="muted" role="status" aria-live="polite">正在載入公開房間…</p>
+    <div id="public-rooms-list" class="public-rooms-list"><p class="muted small">正在連線…</p></div>
+  </section>
+  <p class="muted small">多人連線需要網路及 Firebase 設定。公開列表需在 Firebase Realtime Database Rules 加入本 ZIP 提供的 publicRooms 規則。</p>
 </main>
-<footer>Copyright © 2026 · Xiangqi</footer>
-<script src="js/home.js"></script>
+<footer>Copyright © 2026 · Xiangqi · GitHub Pages prototype</footer>
+<button id="admin-fab" class="admin-fab" type="button" aria-label="管理員模式" title="管理員模式">⚙</button>
+<div id="admin-modal" class="modal" hidden role="dialog" aria-modal="true" aria-labelledby="admin-title">
+  <div class="modal-content admin-modal-content">
+    <button class="modal-close" id="admin-close" type="button" aria-label="關閉">×</button>
+    <h2 id="admin-title">🛡️ 管理員模式（原型）</h2>
+    <p class="admin-warning">安全限制：這是純前端原型，密碼會出現在 JavaScript 中，不能當成真正的管理員驗證。此介面不會提供刪除房間功能。</p>
+    <div id="admin-login-area"><label for="admin-password-input">管理員密碼</label><input id="admin-password-input" type="password" autocomplete="current-password" placeholder="輸入管理員密碼"><button id="admin-login-btn" type="button">登入管理介面</button><p id="admin-login-status" class="muted small" role="status"></p></div>
+    <section id="admin-dashboard" hidden><h3>公開房間狀態</h3><p class="muted small">此原型只能列出 publicRooms 中的公開房間，無法安全地列出全部私人房間或刪除房間。</p><div id="admin-room-list" class="public-rooms-list"></div><button id="admin-refresh-btn" class="secondary-btn" type="button">重新載入列表</button></section>
+  </div>
+</div>
+<script type="module" src="js/home.js?v=20261025-prototype-1"></script>
 </body></html>
