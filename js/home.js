@@ -35,18 +35,34 @@ function renderTopStatus(control = latestSiteControl) {
   const label = $('site-announcement-label');
   const text = $('site-announcement-text');
   if (!banner || !label || !text) return;
+
   const closeAt = Number(control.autoCloseAt || 0);
   const remaining = closeAt - Date.now();
-  if (control.playEnabled !== false && closeAt > 0 && remaining > 0) {
+  const isClosed = control.playEnabled === false || (closeAt > 0 && remaining <= 0);
+
+  // 首頁進入「網站暫停遊玩」狀態時，不再顯示公告橫幅。
+  if (document.body.classList.contains('home-page') && isClosed) {
+    banner.hidden = true;
+    banner.classList.remove('is-countdown');
+    document.body.classList.remove('has-site-announcement');
+    return;
+  }
+
+  // 維護排程中：固定顯示倒數，不使用跑馬燈動畫。
+  if (!isClosed && closeAt > 0 && remaining > 0) {
     const total = Math.ceil(remaining / 1000);
     const h = Math.floor(total / 3600), m = Math.floor((total % 3600) / 60), s = total % 60;
     label.textContent = '⏳ 維護倒數';
-    text.textContent = h > 0 ? `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}` : `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+    text.textContent = h > 0
+      ? `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`
+      : `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
     banner.classList.add('is-countdown');
     banner.hidden = false;
     document.body.classList.add('has-site-announcement');
     return;
   }
+
+  // 一般公告：保留跑馬燈效果。
   banner.classList.remove('is-countdown');
   label.textContent = '📢 公告';
   const message = String(control.announcement || '').trim();
@@ -54,6 +70,7 @@ function renderTopStatus(control = latestSiteControl) {
   banner.hidden = !message;
   document.body.classList.toggle('has-site-announcement', !!message);
 }
+
 setInterval(() => renderTopStatus(), 1000);
 function showMaintenanceNotice(key) {
   if (maintenanceNoticeKey === key || document.getElementById('maintenance-warning-dialog')) return;
