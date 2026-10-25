@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#121212"><title>中國象棋｜多人連線大廳</title>
-<link rel="stylesheet" href="css/style.css?v=20261025-tutorial-v8">
+<link rel="stylesheet" href="css/style.css?v=20261025-admin-auth-v10">
 </head>
 <body class="dark-mode home-page">
 <header class="topbar"><h1>🪨 中國象棋</h1><div class="top-actions"><button class="btn-theme" id="theme-btn" type="button">☀️ 淺色</button></div></header>
@@ -63,15 +63,7 @@
 </main>
 <footer>Copyright © 2026 · Xiangqi · GitHub Pages prototype</footer>
 <button id="admin-fab" class="admin-fab" type="button" aria-label="管理員模式" title="管理員模式">⚙</button>
-<div id="admin-modal" class="modal" hidden role="dialog" aria-modal="true" aria-labelledby="admin-title">
-  <div class="modal-content admin-modal-content">
-    <button class="modal-close" id="admin-close" type="button" aria-label="關閉">×</button>
-    <h2 id="admin-title">🛡️ 管理員模式（原型）</h2>
-    <p class="admin-warning">安全限制：這是純前端原型，密碼會出現在 JavaScript 中，不能當成真正的管理員驗證。此介面不會提供刪除房間功能。</p>
-    <div id="admin-login-area"><label for="admin-password-input">管理員密碼</label><input id="admin-password-input" type="password" autocomplete="current-password" placeholder="輸入管理員密碼"><button id="admin-login-btn" type="button">登入管理介面</button><p id="admin-login-status" class="muted small" role="status"></p></div>
-    <section id="admin-dashboard" hidden><h3>全部房間狀態（含私人房間）</h3><p class="muted small">管理員列表會列出 rooms 節點中的公開與私人房間；目前只提供查看／加入，不提供刪除。注意：為了讓靜態網站列出全部房間，已登入的匿名使用者也能讀取房間清單；此原型不適合放置敏感資料。</p><div id="admin-room-list" class="public-rooms-list"></div><button id="admin-refresh-btn" class="secondary-btn" type="button">重新載入列表</button></section>
-  </div>
-</div>
+
 <script>
 (function () {
   const button = document.getElementById('theme-btn');
@@ -91,5 +83,5 @@
   });
 })();
 </script>
-<script type="module" src="js/home.js?v=20261025-tutorial-v8"></script>
+<script type="module" src="js/home.js?v=20261025-admin-auth-v10"></script>
 </body></html>
