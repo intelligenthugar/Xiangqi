@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="zh-TW"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"><title>中國象棋</title><link rel="stylesheet" href="css/style.css?v=20261026-ranked-lock-v43"></head>
+<html lang="zh-TW"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"><title>中國象棋</title><link rel="stylesheet" href="css/style.css?v=20261026-ranked-auth-singleflight-v45"></head>
 <body class="dark-mode site-pages">
 <header class="topbar game-topbar"><a class="btn-home button-link" href="index.html">🏠 首頁</a><strong id="header-title">🪨 中國象棋（傳統大棋盤）</strong><div class="top-actions"><button class="account-top-btn" id="account-open-btn" type="button">登入／註冊</button><button class="secondary-btn" id="screen-awake-btn" type="button" aria-pressed="false">🔆 保持螢幕常亮</button><button class="btn-theme" id="theme-btn" type="button">☀️ 淺色</button></div></header>
 <section id="site-announcement" class="site-announcement" hidden aria-live="polite"><strong id="site-announcement-label">📢 公告</strong><p class="site-announcement-track"><span id="site-announcement-text"></span></p></section>
@@ -96,7 +96,7 @@ const XIANGQI_TEST_KEY='ji32k7au4a83';const XIANGQI_ADMIN_UID='7PHHdOC8IWYNqbGqa
       <label for="account-email">電子郵件</label><input id="account-email" type="email" autocomplete="email" inputmode="email" required maxlength="254" placeholder="name@example.com">
       <label for="account-password">密碼</label><input id="account-password" type="password" autocomplete="current-password" minlength="6" required placeholder="至少 6 個字元">
       <label id="account-name-label" for="account-username" hidden>使用者名稱</label><input id="account-username" type="text" maxlength="18" autocomplete="nickname" placeholder="設定你的棋手名稱" hidden>
-      <div id="account-auth-actions" class="account-actions"><button id="account-login-btn" type="button">登入</button><button id="account-register-btn" type="button" class="secondary-btn">建立帳號</button></div><button id="account-setup-save-btn" type="button" hidden>儲存使用者名稱</button>
+      <div id="account-auth-actions" class="account-actions"><button id="account-login-btn" type="button">登入</button></div><p class="account-register-prompt">還沒有註冊過帳號？<button id="account-register-btn" type="button" class="account-text-link">點我註冊帳號</button></p><button id="account-setup-save-btn" type="button" hidden>儲存使用者名稱</button>
     </div>
     <div id="account-profile-area" hidden>
       <p class="account-current-user">目前使用者：<strong id="account-profile-name"></strong></p>
@@ -118,5 +118,20 @@ const XIANGQI_TEST_KEY='ji32k7au4a83';const XIANGQI_ADMIN_UID='7PHHdOC8IWYNqbGqa
   </div>
 </div>
 
-<script type="module" src="js/chess.js?v=20261026-ranked-lock-v43"></script>
+
+<div id="account-register-modal" class="account-modal" hidden role="dialog" aria-modal="true" aria-labelledby="account-register-title">
+  <div class="account-modal-card">
+    <button type="button" id="account-register-close" class="account-close-btn" aria-label="關閉註冊視窗">×</button>
+    <h2 id="account-register-title">📝 註冊棋手帳號</h2>
+    <p class="muted">請填寫電子郵件、密碼及使用者名稱。使用者名稱只在註冊時需要。</p>
+    <label for="register-email">電子郵件</label><input id="register-email" type="email" autocomplete="email" inputmode="email" required maxlength="254" placeholder="name@example.com">
+    <label for="register-password">密碼</label><input id="register-password" type="password" autocomplete="new-password" minlength="6" required placeholder="至少 6 個字元">
+    <label for="register-username">使用者名稱</label><input id="register-username" type="text" maxlength="18" autocomplete="nickname" required placeholder="設定你的棋手名稱">
+    <button id="account-register-submit" type="button">建立帳號</button>
+    <button id="account-register-back" type="button" class="secondary-btn">返回登入</button>
+    <p id="account-register-status" class="account-status" role="status" aria-live="polite"></p>
+  </div>
+</div>
+
+<script type="module" src="js/chess.js?v=20261026-ranked-auth-singleflight-v45"></script>
 </body></html>
