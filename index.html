@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#121212"><title>中國象棋｜多人連線大廳</title>
-<link rel="stylesheet" href="css/style.css?v=20261025-player-accounts-v36-online-only-auth-fix">
+<link rel="stylesheet" href="css/style.css?v=20261026-ranked-lock-v39">
 </head>
 <body class="dark-mode home-page site-pages">
 <header class="topbar"><h1>🪨 中國象棋</h1><div class="top-actions"><button class="account-top-btn" id="account-open-btn" type="button">登入／註冊</button><button class="secondary-btn" id="screen-awake-btn" type="button" aria-pressed="false">🔆 保持螢幕常亮</button><button class="btn-theme" id="theme-btn" type="button">☀️ 淺色</button></div></header>
@@ -25,8 +25,9 @@
   <section id="site-maintenance-banner" class="site-maintenance-banner" hidden role="status"><strong>⛔ 網站暫停遊玩</strong><p id="site-maintenance-message">管理員目前暫停了遊戲，請稍後再來。</p></section>
   <p class="eyebrow">中國象棋 · 傳統棋藝</p><h2 id="lobby-title">選擇你的對弈方式</h2><p class="muted" id="lobby-subtitle">保留傳統棋盤風格，與 AI 或朋友一決勝負。</p>
   <section class="lobby-cards">
-    <a class="mode-card" href="chess.html?mode=pve"><span class="card-icon">♟</span><h3 id="single-title">單機版</h3><p id="single-desc">與 AI 對弈，支援初級與高級難度。</p><span class="card-cta" id="single-cta">開始遊戲 →</span></a>
-    <a class="mode-card featured" href="chess.html?mode=online"><span class="card-icon">♟♟</span><h3 id="multi-title">多人連線</h3><p id="multi-desc">建立公開或私人房間，輸入房號與朋友即時對弈。</p><span class="card-cta" id="multi-cta">進入連線大廳 →</span></a>
+    <a class="mode-card" href="chess.html?mode=pve"><span class="card-icon">♟</span><h3 id="single-title">單機版</h3><p id="single-desc">與 AI 自由練習，支援不同難度，不影響排位積分。</p><span class="card-cta" id="single-cta">開始遊戲 →</span></a>
+    <a class="mode-card featured" href="chess.html?mode=online"><span class="card-icon">♟♟</span><h3 id="multi-title">連線模式</h3><p id="multi-desc">建立公開或私人房間，輸入房號與朋友即時對弈。</p><span class="card-cta" id="multi-cta">進入連線大廳 →</span></a>
+    <a class="mode-card ranked-mode-card" href="chess.html?mode=ranked"><span class="card-icon">🏆</span><h3 id="ranked-title">積分排位賽</h3><p id="ranked-desc">挑戰更強的 AI，依照勝敗與表現累積排位積分。登入後才會保存積分並登上排行榜。</p><span class="card-cta" id="ranked-cta">開始排位 →</span></a>
   </section>
   <section class="xiangqi-tutorial" id="xiangqi-tutorial">
     <div class="tutorial-heading"><p class="eyebrow">新手入門 · 從零開始</p><h2>📚 象棋教學</h2><p class="muted">先認識棋盤與棋子，再學會基本戰術。點選下方分類即可開始。</p></div>
@@ -135,5 +136,5 @@
   document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&enabled&&!sentinel)acquire();});paint();
 })();
 </script>
-<script type="module" src="js/home.js?v=20261025-player-accounts-v36-online-only-auth-fix"></script>
+<script type="module" src="js/home.js?v=20261026-ranked-lock-v39"></script>
 </body></html>

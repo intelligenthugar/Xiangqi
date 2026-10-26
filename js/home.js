@@ -159,30 +159,43 @@ async function startSiteTracking() {
       import('https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js'),
       import('https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js')
     ]);
+    // 使用帳號系統共用的 Firebase Auth：登入時以帳號 UID 記錄，未登入時才使用匿名裝置 UID。
     const app = appMod.getApps().find(a => a.name === 'xiangqi-player-accounts') || appMod.initializeApp(firebaseConfig, 'xiangqi-player-accounts');
     const auth = authMod.getAuth(app);
     const database = dbMod.getDatabase(app);
-    try { await authMod.setPersistence(auth, authMod.browserLocalPersistence); } catch (e) { console.warn('登入持久性設定提醒', e); }
+    try { await authMod.setPersistence(auth, authMod.browserLocalPersistence); } catch {}
     dbMod.onValue(dbMod.ref(database, 'siteControl'), snap => applySiteControl(snap.val() || {playEnabled:true,announcement:''}), error => {
-      console.warn('網站設定讀取失敗', error); applySiteControl({playEnabled:true,announcement:''});
+      console.warn('網站設定讀取失敗', error);
+      applySiteControl({playEnabled:true,announcement:''});
+      if ($('public-rooms-status')) $('public-rooms-status').textContent = '無法讀取網站公告／開放狀態；請確認 Firebase Rules。';
     });
-    let trackedUid = '', trackedRef = null, trackedName = '', heartbeat = null;
-    const markOffline = () => { if (trackedRef) dbMod.update(trackedRef,{online:false,lastSeen:dbMod.serverTimestamp()}).catch(()=>{}); };
-    const registerOnline = async currentUser => {
-      if (!currentUser || currentUser.isAnonymous) { markOffline(); trackedUid=''; trackedRef=null; if(heartbeat)clearInterval(heartbeat); return; }
-      const uid=currentUser.uid; if(uid===trackedUid)return;
-      markOffline(); trackedUid=uid; const currentRef=dbMod.ref(database,`siteVisitors/current/${uid}`); trackedRef=currentRef;
-      let profileName=''; try { const snap=await dbMod.get(dbMod.ref(database,`users/${uid}/profile`)); profileName=snap.val()?.displayName||''; } catch {}
-      const displayName=(profileName||localStorage.getItem('xiangqi-nickname')||'已登入棋手').replace(/[<>]/g,'').slice(0,18); trackedName=displayName;
-      await dbMod.set(currentRef,{uid,name:displayName,visitorType:'account',online:true,lastSeen:dbMod.serverTimestamp(),page:location.pathname.endsWith('chess.html')?'棋盤':'大廳'});
+
+    let trackedUid = '', trackedCurrentRef = null, heartbeat = null;
+    const registerVisitor = async currentUser => {
+      if (!currentUser) { try { await authMod.signInAnonymously(auth); } catch (e) { console.warn('匿名訪客初始化失敗', e); } return; }
+      const uid = currentUser.uid;
+      if (uid === trackedUid) return;
+      if (trackedCurrentRef) dbMod.update(trackedCurrentRef, {online:false,lastSeen:dbMod.serverTimestamp()}).catch(()=>{});
+      trackedUid = uid;
+      const currentRef = dbMod.ref(database, `siteVisitors/current/${uid}`);
+      trackedCurrentRef = currentRef;
+      if (heartbeat) clearInterval(heartbeat);
+      let profileName = '';
+      if (!currentUser.isAnonymous) {
+        try { const profileSnap = await dbMod.get(dbMod.ref(database, `users/${uid}/profile`)); profileName = profileSnap.val()?.displayName || ''; } catch {}
+      }
+      const displayName = (profileName || localStorage.getItem('xiangqi-nickname') || (currentUser.isAnonymous ? '裝置訪客' : '已登入棋手')).replace(/[<>]/g,'').slice(0,18);
+      const visitorType = currentUser.isAnonymous ? 'device' : 'account';
+      await dbMod.set(currentRef, {uid, name:displayName, visitorType, online:true, lastSeen:dbMod.serverTimestamp(), page:'大廳'});
       try { await dbMod.onDisconnect(currentRef).update({online:false,lastSeen:dbMod.serverTimestamp()}); } catch {}
-      if(heartbeat)clearInterval(heartbeat);
-      const update=()=>{if(document.visibilityState==='visible'&&trackedUid===uid)dbMod.update(currentRef,{name:trackedName,online:true,lastSeen:dbMod.serverTimestamp(),page:location.pathname.endsWith('chess.html')?'棋盤':'大廳'}).catch(()=>{});};
-      document.addEventListener('visibilitychange',update); heartbeat=setInterval(update,45000);
+      const now = Date.now();
+
+      const updatePresence = () => { if (document.visibilityState === 'visible' && trackedUid === uid) dbMod.update(currentRef,{name:displayName,visitorType,online:true,lastSeen:dbMod.serverTimestamp(),page:'大廳'}).catch(()=>{}); };
+      document.addEventListener('visibilitychange', updatePresence);
+      heartbeat = setInterval(updatePresence, 45000);
     };
-    authMod.onAuthStateChanged(auth,user=>registerOnline(user).catch(e=>console.warn('在線訪客更新失敗',e)));
-    window.addEventListener('pagehide',markOffline);
-  } catch (e) { console.warn('網站狀態／在線訪客追蹤未啟用', e); }
+    authMod.onAuthStateChanged(auth, user => { registerVisitor(user).catch(e => console.warn('訪客紀錄更新失敗', e)); });
+  } catch (e) { console.warn('網站狀態／訪客追蹤未啟用', e); }
 }
 
 document.addEventListener('click', event => { if (!testBypass && window.__xiangqiPlayEnabled === false) { const link = event.target.closest('a'); if (link && !link.href.includes('admin.html')) { event.preventDefault(); event.stopPropagation(); window.alert('網站目前暫停遊玩，請稍後再來。'); } } }, true);
