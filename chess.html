@@ -1,137 +1,255 @@
 <!DOCTYPE html>
-<html lang="zh-TW"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"><title>中國象棋</title><link rel="stylesheet" href="css/style.css?v=20261028-restart-confirm-v46"></head>
+<html lang="zh-TW">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+  <title>中國象棋</title>
+  <link rel="stylesheet" href="css/style.css?v=20261028-restart-confirm-v46">
+</head>
+
 <body class="dark-mode site-pages">
-<header class="topbar game-topbar"><a class="btn-home button-link" href="index.html">🏠 首頁</a><strong id="header-title">🪨 中國象棋（傳統大棋盤）</strong><div class="top-actions"><button class="account-top-btn" id="account-open-btn" type="button">登入／註冊</button><button class="secondary-btn" id="screen-awake-btn" type="button" aria-pressed="false">🔆 保持螢幕常亮</button><button class="btn-theme" id="theme-btn" type="button">☀️ 淺色</button></div></header>
-<section id="site-announcement" class="site-announcement" hidden aria-live="polite"><strong id="site-announcement-label">📢 公告</strong><p class="site-announcement-track"><span id="site-announcement-text"></span></p></section>
-<script>
-(function(){
-  const header=document.querySelector('.topbar');
-  if(!header)return;
-  const updateHeaderHeight=()=>{
-    const height=Math.ceil(header.getBoundingClientRect().height);
-    document.documentElement.style.setProperty('--site-header-height',height+'px');
-  };
-  updateHeaderHeight();
-  if('ResizeObserver' in window)new ResizeObserver(updateHeaderHeight).observe(header);
-  window.addEventListener('resize',updateHeaderHeight,{passive:true});
-})();
-</script>
-<main class="game-view">
-<section id="online-panel" class="online-panel" hidden>
-  <h2>🌐 多人連線</h2><p id="online-status" role="status" aria-live="polite">正在連接 Firebase…</p><p class="small muted">建立房間後，把顯示的 6 碼代碼傳給朋友；對方輸入代碼後即可加入。</p>
-  <section class="public-lobby-panel online-public-lobby">
-    <div class="public-lobby-heading"><div><h3>🌐 公開房間列表</h3><p class="muted small">點選等待中的房間即可加入；私人房間不會出現在這裡。</p></div><button id="online-refresh-rooms-btn" class="secondary-btn" type="button">重新整理</button></div>
-    <p id="online-public-rooms-status" class="muted small" role="status" aria-live="polite">正在載入公開房間…</p>
-    <div id="online-public-rooms-list" class="public-rooms-list"><p class="muted small">正在連線…</p></div>
+  <header class="topbar game-topbar"><a class="btn-home button-link" href="index.html">🏠 首頁</a><strong
+      id="header-title">🪨 中國象棋（傳統大棋盤）</strong>
+    <div class="top-actions"><button class="account-top-btn" id="account-open-btn" type="button">登入／註冊</button><button
+        class="secondary-btn" id="screen-awake-btn" type="button" aria-pressed="false">🔆 保持螢幕常亮</button><button
+        class="btn-theme" id="theme-btn" type="button">☀️ 淺色</button></div>
+  </header>
+  <section id="site-announcement" class="site-announcement" hidden aria-live="polite"><strong
+      id="site-announcement-label">📢 公告</strong>
+    <p class="site-announcement-track"><span id="site-announcement-text"></span></p>
   </section>
-  <div class="room-setup-grid">
-    <label>玩家暱稱<input id="player-nickname" maxlength="18" placeholder="輸入暱稱（1～18 字）" autocomplete="nickname"></label>
-    <label>房間類型<select id="room-visibility-select"><option value="public">公開房間（顯示在大廳）</option><option value="private">私人房間（不公開）</option></select></label>
-    <label class="room-password-label">房間密碼（可留空）<input id="room-password-input" maxlength="64" type="password" placeholder="設定密碼；加入時需輸入" autocomplete="new-password"></label>
-  </div>
-  <div class="online-actions"><button id="create-room-btn">建立房間</button><div class="join-row"><input id="room-code-input" maxlength="6" placeholder="輸入 6 碼房間代碼" autocomplete="off"><button id="join-room-btn">加入房間</button></div></div>
-  <p class="small muted">暱稱只用於顯示。此原型的房間密碼是前端檢查，不能取代伺服器端安全驗證。</p>
-  <div id="room-info" hidden><p>房間代碼：<strong id="room-code-display"></strong></p><div class="room-share-actions"><button id="copy-room-btn" class="secondary-btn">📋 複製房間代碼</button><button id="copy-invite-btn" class="invite-btn">🔗 複製邀請網址</button></div><p id="room-role"></p><p id="room-players-display">紅方：等待玩家　｜　黑方：等待玩家</p><p id="opponent-presence" role="status" aria-live="polite">🟡 對手狀態：尚未確認</p><p id="room-waiting"></p><button id="leave-room-btn" class="btn-danger" type="button">🚪 離開房間</button></div>
-</section>
-<div class="controls"><span id="chess-mode-title">傳統象棋</span><select id="chess-game-mode"><option value="pve">單人對戰 (AI)</option><option value="ranked">🏆 排位挑戰（積分）</option><option value="pvp">雙人對戰（同裝置）</option></select><select id="chess-ai-level"><option value="easy">AI：初級</option><option value="medium">AI：中級</option><option value="hard" selected>AI：高級</option></select><button id="restart-btn">重來</button></div>
-<section id="ranked-panel" class="ranked-panel" hidden><div><strong>🏆 AI 排位挑戰</strong><p>只有登入帳號才會記錄積分並登上排行榜。勝敗決定基礎分，吃子與將軍等走法表現會影響技術加成。</p></div><div class="ranked-score"><span>目前積分</span><strong id="ranked-rating">1000</strong></div><button id="ranked-leaderboard-btn" type="button">查看排行榜</button><div id="ranked-leaderboard" class="ranked-leaderboard" hidden></div></section>
-<div id="chess-status" class="status">準備開始…</div>
-<div class="chess-container"><div class="couplet-couplet">觀棋不語真君子</div><div class="chess-wrapper"><div id="check-banner" class="check-banner">⚠️ 將軍 CHECK！點一下這個提示可關閉</div><div id="coin-overlay" class="coin-overlay"><div class="coin-container"><div id="coin" class="coin"><div class="coin-face front">紅</div><div class="coin-face back">黑</div></div></div><div id="coin-text-tip" class="coin-text-tip">🪙 擲硬幣決定先手...</div></div><div class="chess-board" id="chess-board"></div></div><div class="couplet-couplet">棋手無回大丈夫</div></div>
-</main>
-<div class="modal" id="win-modal" hidden><div class="modal-content"><button class="modal-close" id="close-win" aria-label="關閉">×</button><div id="result-stamp" class="result-stamp" hidden aria-live="assertive">勝</div><h2 id="win-modal-title">🏆 遊戲結束！</h2><p id="winner-message"></p><div id="winner-reason" class="reason-box"></div><p id="rematch-status" aria-live="polite"></p><div class="rematch-actions"><button id="rematch-request-btn" type="button">詢問對方再玩一局</button><button id="rematch-accept-btn" type="button" hidden>同意，再玩一局</button><button id="rematch-decline-btn" type="button" class="btn-danger" hidden>不玩了，關閉房間</button><button id="confirm-win">確定</button></div></div></div>
-<div class="modal" id="confirm-modal" hidden><div class="modal-content"><p id="confirm-message"></p><div class="modal-buttons"><button class="secondary-btn" id="cancel-confirm">取消</button><button id="accept-confirm">確定</button></div></div></div>
-<footer>Copyright © 2026 · Xiangqi</footer>
-<script>
-(function () {
-  const button = document.getElementById('theme-btn');
-  if (!button) return;
-  function applyTheme(theme) {
-    document.body.classList.toggle('dark-mode', theme === 'dark');
-    button.textContent = theme === 'dark' ? '☀️ 淺色' : '🌙 深色';
-    button.setAttribute('aria-label', theme === 'dark' ? '切換為淺色模式' : '切換為深色模式');
-  }
-  let saved = 'dark';
-  try { saved = localStorage.getItem('xiangqi-theme') || 'dark'; } catch (_) {}
-  applyTheme(saved === 'light' ? 'light' : 'dark');
-  button.addEventListener('click', function () {
-    const next = document.body.classList.contains('dark-mode') ? 'light' : 'dark';
-    applyTheme(next);
-    try { localStorage.setItem('xiangqi-theme', next); } catch (_) {}
-  });
-})();
-</script>
-<script>
-(function(){
-  const button=document.getElementById('screen-awake-btn');
-  if(!button)return;
-  let sentinel=null, enabled=false;
-  function paint(){button.textContent=enabled?(sentinel?'☀️ 常亮中':'⏳ 正在啟用常亮…'):'🔆 保持螢幕常亮';button.setAttribute('aria-pressed',String(enabled));}
-  async function acquire(){
-    if(!enabled||!('wakeLock' in navigator))return;
-    try{if(sentinel)await sentinel.release().catch(()=>{});sentinel=await navigator.wakeLock.request('screen');sentinel.addEventListener('release',()=>{sentinel=null;paint();});paint();}
-    catch(e){sentinel=null;paint();button.title='瀏覽器目前無法保持螢幕常亮，請保持頁面在前景並確認瀏覽器支援此功能。';}
-  }
-  button.addEventListener('click',async()=>{
-    if(!('wakeLock' in navigator)){window.alert('目前瀏覽器不支援螢幕常亮功能。請使用最新版 Chrome 或 Edge，並透過 HTTPS 開啟網站。');return;}
-    enabled=!enabled;
-    if(!enabled){if(sentinel){const old=sentinel;sentinel=null;try{await old.release();}catch(_){}}paint();return;}
-    paint();await acquire();
-    if(!sentinel){enabled=false;paint();window.alert('無法啟用螢幕常亮。請確認網站以 HTTPS 開啟，且頁面目前在前景。');}
-  });
-  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&enabled&&!sentinel)acquire();});
-  paint();
-})();
-</script>
-<script type="module">
-import { firebaseConfig } from './js/firebase-config.js';
-const XIANGQI_TEST_KEY='ji32k7au4a83';const XIANGQI_ADMIN_UID='7PHHdOC8IWYNqbGqaajq8j8DK822';const xiangqiTestKeyRequested=new URLSearchParams(location.search).get('key')===XIANGQI_TEST_KEY;let xiangqiTestBypass=false;function removeXiangqiTestKey(){const u=new URL(location.href);u.searchParams.delete('key');history.replaceState(history.state,'',u.pathname+u.search+u.hash)}function preserveXiangqiTestKey(root=document){if(!xiangqiTestBypass)return;root.querySelectorAll?.('a[href]').forEach(a=>{try{const u=new URL(a.href,location.href);if(u.origin===location.origin&&!u.searchParams.has('key')){u.searchParams.set('key',XIANGQI_TEST_KEY);a.href=u.href}}catch{}})}
-(async()=>{try{const [appM,authM,dbM]=await Promise.all([import('https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js'),import('https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js'),import('https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js')]);if(xiangqiTestKeyRequested){try{const accountApp=appM.getApps().find(a=>a.name==='xiangqi-player-accounts')||appM.initializeApp(firebaseConfig,'xiangqi-player-accounts');const accountAuth=authM.getAuth(accountApp);let stopAccount;const accountUser=await new Promise(resolve=>{stopAccount=authM.onAuthStateChanged(accountAuth,u=>{stopAccount?.();resolve(u);});});if(accountUser&&!accountUser.isAnonymous&&accountUser.uid===XIANGQI_ADMIN_UID){xiangqiTestBypass=true;preserveXiangqiTestKey();new MutationObserver(ms=>ms.forEach(m=>m.addedNodes.forEach(n=>{if(n.nodeType===1){preserveXiangqiTestKey(n);if(n.matches?.('a[href]'))preserveXiangqiTestKey(n.parentNode||document)}}))).observe(document.documentElement,{childList:true,subtree:true});document.addEventListener('click',e=>{const a=e.target.closest?.('a[href]');if(a)preserveXiangqiTestKey(a.parentNode||document)},true);}else removeXiangqiTestKey();}catch(e){console.warn('測試模式管理員驗證失敗',e);removeXiangqiTestKey();}}const app=appM.getApps().find(a=>a.name==='xiangqi-player-accounts')||appM.initializeApp(firebaseConfig,'xiangqi-player-accounts');const auth=authM.getAuth(app);try{await authM.setPersistence(auth,authM.browserLocalPersistence)}catch{}let stop;const u=await new Promise(resolve=>{stop=authM.onAuthStateChanged(auth,x=>{stop?.();resolve(x)})});if(!u)await authM.signInAnonymously(auth);const db=dbM.getDatabase(app);let siteCloseTimer=null,maintenanceWarningTimer=null,maintenanceNoticeKey='',latestSiteControl={};function renderTopStatus(control=latestSiteControl){const banner=document.getElementById('site-announcement'),label=document.getElementById('site-announcement-label'),text=document.getElementById('site-announcement-text');if(!banner||!label||!text)return;if(xiangqiTestBypass){banner.classList.remove('is-countdown');label.textContent='🧪 測試模式';text.textContent='測試模式已啟用：維護期間仍可進入遊戲。';banner.hidden=false;document.body.classList.add('has-site-announcement');return}const closeAt=Number(control.autoCloseAt||0),remaining=closeAt-Date.now();if(control.playEnabled!==false&&closeAt>0&&remaining>0){const total=Math.ceil(remaining/1000),h=Math.floor(total/3600),m=Math.floor((total%3600)/60),s=total%60;label.textContent='⏳ 維護倒數';text.textContent=h>0?`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`:`${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;banner.classList.add('is-countdown');banner.hidden=false;document.body.classList.add('has-site-announcement');return}banner.classList.remove('is-countdown');label.textContent='📢 公告';const message=String(control.announcement||'').trim();text.textContent=message;banner.hidden=!message;document.body.classList.toggle('has-site-announcement',!!message)}renderTopStatus();setInterval(()=>{renderTopStatus();const closeAt=Number(latestSiteControl.autoCloseAt||0);if(latestSiteControl.playEnabled!==false&&closeAt>Date.now()&&closeAt-Date.now()<=60000)showMaintenanceNotice(`scheduled-${closeAt}`)},1000);function showMaintenanceNotice(key){if(maintenanceNoticeKey===key||document.getElementById('maintenance-warning-dialog'))return;maintenanceNoticeKey=key;const style=document.createElement('style');style.textContent='#maintenance-warning-dialog{position:fixed;inset:0;z-index:100001;background:#000b;display:flex;align-items:center;justify-content:center;padding:18px;box-sizing:border-box}#maintenance-warning-dialog .maintenance-warning-card{width:min(520px,100%);background:#171717;color:#fff;border:2px solid #e5b93f;border-radius:18px;padding:24px;box-shadow:0 18px 70px #0009;text-align:center}#maintenance-warning-dialog h2{margin:0 0 14px;color:#ffd54f;font-size:clamp(22px,5vw,30px)}#maintenance-warning-dialog p{font-size:clamp(17px,3.8vw,21px);line-height:1.7;margin:0 0 20px}#maintenance-warning-dialog button{border:0;border-radius:10px;padding:12px 22px;background:#ffd54f;color:#241b00;font-weight:800;font-size:16px;cursor:pointer}';document.head.appendChild(style);const dialog=document.createElement('div');dialog.id='maintenance-warning-dialog';dialog.setAttribute('role','alertdialog');dialog.setAttribute('aria-modal','true');dialog.innerHTML='<div class="maintenance-warning-card"><h2>⚠️ 系統維護提醒</h2><p>即將進行網站維護！請盡快結束目前對局。維護開始後，這場棋局將不會被儲存。</p><button type="button" id="maintenance-warning-ok">我知道了</button></div>';document.body.appendChild(dialog);document.getElementById('maintenance-warning-ok').addEventListener('click',()=>dialog.remove())}let trackedVisitorUid='',trackedCurrentRef=null,trackedVisitorName='',trackedVisitorType='device';async function trackVisitor(visitorUser){if(!visitorUser)return;const uid=visitorUser.uid;if(uid===trackedVisitorUid)return;if(trackedCurrentRef)dbM.update(trackedCurrentRef,{online:false,lastSeen:dbM.serverTimestamp()}).catch(()=>{});trackedVisitorUid=uid;const currentRef=dbM.ref(db,`siteVisitors/current/${uid}`);trackedCurrentRef=currentRef;let profileName='';if(!visitorUser.isAnonymous){try{const ps=await dbM.get(dbM.ref(db,`users/${uid}/profile`));profileName=ps.val()?.displayName||''}catch{}}const name=(profileName||localStorage.getItem('xiangqi-nickname')||(visitorUser.isAnonymous?'裝置訪客':'已登入棋手')).replace(/[<>]/g,'').slice(0,18);const visitorType=visitorUser.isAnonymous?'device':'account';trackedVisitorName=name;trackedVisitorType=visitorType;await dbM.set(currentRef,{uid,name,visitorType,online:true,lastSeen:dbM.serverTimestamp(),page:'棋盤'});try{await dbM.onDisconnect(currentRef).update({online:false,lastSeen:dbM.serverTimestamp()})}catch{}}authM.onAuthStateChanged(auth,u=>{if(u)trackVisitor(u).catch(e=>console.warn('訪客紀錄更新失敗',e))});document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&trackedCurrentRef)dbM.update(trackedCurrentRef,{name:trackedVisitorName,visitorType:trackedVisitorType,online:true,lastSeen:dbM.serverTimestamp(),page:'棋盤'}).catch(()=>{})});setInterval(()=>{if(document.visibilityState==='visible'&&trackedCurrentRef)dbM.update(trackedCurrentRef,{name:trackedVisitorName,visitorType:trackedVisitorType,online:true,lastSeen:dbM.serverTimestamp(),page:'棋盤'}).catch(()=>{})},45000);dbM.onValue(dbM.ref(db,'siteControl'),snap=>{const c=snap.val()||{};latestSiteControl=c;renderTopStatus(c);if(siteCloseTimer){clearTimeout(siteCloseTimer);siteCloseTimer=null}if(maintenanceWarningTimer){clearTimeout(maintenanceWarningTimer);maintenanceWarningTimer=null}const closeAt=Number(c.autoCloseAt||0);const closed=!xiangqiTestBypass&&(c.playEnabled===false||(closeAt>0&&Date.now()>=closeAt));if(xiangqiTestBypass){document.getElementById('site-closed-overlay')?.remove();}if(c.playEnabled===false||xiangqiTestBypass||!(closeAt>Date.now())){document.getElementById('maintenance-warning-dialog')?.remove();maintenanceNoticeKey='';}else if(!xiangqiTestBypass&&closeAt>Date.now()){const noticeKey='scheduled-'+closeAt;maintenanceWarningTimer=setTimeout(()=>showMaintenanceNotice(noticeKey),Math.max(0,closeAt-Date.now()-60000));}if(!xiangqiTestBypass&&closeAt>Date.now())siteCloseTimer=setTimeout(()=>{const overlayNow=document.getElementById('site-closed-overlay');if(!overlayNow){const o=document.createElement('div');o.id='site-closed-overlay';o.className='site-closed-overlay';o.innerHTML='<div class="site-closed-card"><h1>⛔ 網站暫停遊玩</h1><p id="site-closed-message"></p><a href="admin.html">⚙ 管理員入口</a><p><a href="index.html" style="background:transparent;color:#f0c54b">返回大廳</a></p></div>';document.body.appendChild(o)}const msg=document.getElementById('site-closed-message');if(msg)msg.textContent=c.maintenanceMessage||'管理員目前暫停了遊戲，請稍後再來。'},Math.min(closeAt-Date.now()+50,2147483000));let overlay=document.getElementById('site-closed-overlay');if(closed){if(!overlay){overlay=document.createElement('div');overlay.id='site-closed-overlay';overlay.className='site-closed-overlay';overlay.innerHTML='<div class="site-closed-card"><h1>⛔ 網站暫停遊玩</h1><p id="site-closed-message">管理員目前暫停了遊戲，請稍後再來。</p><a href="admin.html">⚙ 管理員入口</a><p><a href="index.html" style="background:transparent;color:#f0c54b">返回大廳</a></p></div>';document.body.appendChild(overlay)}document.getElementById('site-closed-message').textContent=c.maintenanceMessage||'管理員目前暫停了遊戲，請稍後再來。';}else if(overlay)overlay.remove();},e=>console.warn('無法讀取網站開放狀態',e));}catch(e){console.warn('網站狀態檢查失敗，保留遊戲頁面',e)}})();
-</script>
-<div id="account-modal" class="account-modal" hidden role="dialog" aria-modal="true" aria-labelledby="account-modal-title">
-  <div class="account-modal-card">
-    <button type="button" id="account-close-btn" class="account-close-btn" aria-label="關閉帳號視窗">×</button>
-    <h2 id="account-modal-title">👤 棋手帳號</h2>
-    <p id="account-subtitle" class="muted">註冊帳號即可保存單機與多人對戰紀錄。</p>
-    <div id="account-auth-fields">
-      <label for="account-email">電子郵件</label><input id="account-email" type="email" autocomplete="email" inputmode="email" required maxlength="254" placeholder="name@example.com">
-      <label for="account-password">密碼</label><input id="account-password" type="password" autocomplete="current-password" minlength="6" required placeholder="至少 6 個字元">
-      <label id="account-name-label" for="account-username" hidden>使用者名稱</label><input id="account-username" type="text" maxlength="18" autocomplete="nickname" placeholder="設定你的棋手名稱" hidden>
-      <div id="account-auth-actions" class="account-actions"><button id="account-login-btn" type="button">登入</button></div><p class="account-register-prompt">還沒有註冊過帳號？<button id="account-register-btn" type="button" class="account-text-link">點我註冊帳號</button></p><button id="account-setup-save-btn" type="button" hidden>儲存使用者名稱</button>
-    </div>
-    <div id="account-profile-area" hidden>
-      <p class="account-current-user">目前使用者：<strong id="account-profile-name"></strong></p>
-      <label for="account-edit-name">修改使用者名稱</label><input id="account-edit-name" type="text" maxlength="18" autocomplete="nickname" placeholder="輸入新名稱">
-      <button id="account-save-name-btn" type="button">儲存名稱</button>
-      <section class="account-history-section" aria-labelledby="account-ai-history-title">
-        <h3 id="account-ai-history-title">🤖 1. 打 AI 戰績</h3>
-        <div class="account-stats-grid"><div><strong id="account-ai-played">0</strong><span>對戰場數</span></div><div><strong id="account-ai-wins">0</strong><span>勝場</span></div><div><strong id="account-ai-losses">0</strong><span>敗場</span></div><div><strong id="account-ai-draws">0</strong><span>平手</span></div></div>
-        <div id="account-ai-match-list" class="account-match-list"><p class="muted small">登入後會載入 AI 戰績。</p></div>
+  <script>
+    (function () {
+      const header = document.querySelector('.topbar');
+      if (!header) return;
+      const updateHeaderHeight = () => {
+        const height = Math.ceil(header.getBoundingClientRect().height);
+        document.documentElement.style.setProperty('--site-header-height', height + 'px');
+      };
+      updateHeaderHeight();
+      if ('ResizeObserver' in window) new ResizeObserver(updateHeaderHeight).observe(header);
+      window.addEventListener('resize', updateHeaderHeight, { passive: true });
+    })();
+  </script>
+  <main class="game-view">
+    <section id="online-panel" class="online-panel" hidden>
+      <h2>🌐 多人連線</h2>
+      <p id="online-status" role="status" aria-live="polite">正在連接 Firebase…</p>
+      <p class="small muted">建立房間後，把顯示的 6 碼代碼傳給朋友；對方輸入代碼後即可加入。</p>
+      <section class="public-lobby-panel online-public-lobby">
+        <div class="public-lobby-heading">
+          <div>
+            <h3>🌐 公開房間列表</h3>
+            <p class="muted small">點選等待中的房間即可加入；私人房間不會出現在這裡。</p>
+          </div><button id="online-refresh-rooms-btn" class="secondary-btn" type="button">重新整理</button>
+        </div>
+        <p id="online-public-rooms-status" class="muted small" role="status" aria-live="polite">正在載入公開房間…</p>
+        <div id="online-public-rooms-list" class="public-rooms-list">
+          <p class="muted small">正在連線…</p>
+        </div>
       </section>
-      <section class="account-history-section" aria-labelledby="account-online-history-title">
-        <h3 id="account-online-history-title">🌐 2. 連線對打戰績</h3>
-        <div class="account-stats-grid"><div><strong id="account-online-played">0</strong><span>對戰場數</span></div><div><strong id="account-online-wins">0</strong><span>勝場</span></div><div><strong id="account-online-losses">0</strong><span>敗場</span></div><div><strong id="account-online-draws">0</strong><span>平手</span></div></div>
-        <div id="account-online-match-list" class="account-match-list"><p class="muted small">登入後會載入連線戰績。</p></div>
-      </section>
-      <button id="account-logout-btn" type="button" class="secondary-btn">登出</button>
+      <div class="room-setup-grid">
+        <label>玩家暱稱<input id="player-nickname" maxlength="18" placeholder="輸入暱稱（1～18 字）"
+            autocomplete="nickname"></label>
+        <label>房間類型<select id="room-visibility-select">
+            <option value="public">公開房間（顯示在大廳）</option>
+            <option value="private">私人房間（不公開）</option>
+          </select></label>
+        <label class="room-password-label">房間密碼（可留空）<input id="room-password-input" maxlength="64" type="password"
+            placeholder="設定密碼；加入時需輸入" autocomplete="new-password"></label>
+      </div>
+      <div class="online-actions"><button id="create-room-btn">建立房間</button>
+        <div class="join-row"><input id="room-code-input" maxlength="6" placeholder="輸入 6 碼房間代碼"
+            autocomplete="off"><button id="join-room-btn">加入房間</button></div>
+      </div>
+      <p class="small muted">暱稱只用於顯示。此原型的房間密碼是前端檢查，不能取代伺服器端安全驗證。</p>
+      <div id="room-info" hidden>
+        <p>房間代碼：<strong id="room-code-display"></strong></p>
+        <div class="room-share-actions"><button id="copy-room-btn" class="secondary-btn">📋 複製房間代碼</button><button
+            id="copy-invite-btn" class="invite-btn">🔗 複製邀請網址</button></div>
+        <p id="room-role"></p>
+        <p id="room-players-display">紅方：等待玩家　｜　黑方：等待玩家</p>
+        <p id="opponent-presence" role="status" aria-live="polite">🟡 對手狀態：尚未確認</p>
+        <p id="room-waiting"></p><button id="leave-room-btn" class="btn-danger" type="button">🚪 離開房間</button>
+      </div>
+    </section>
+    <div class="controls"><span id="chess-mode-title">傳統象棋</span><select id="chess-game-mode">
+        <option value="pve">單人對戰 (AI)</option>
+        <option value="ranked">🏆 排位挑戰（積分）</option>
+        <option value="pvp">雙人對戰（同裝置）</option>
+      </select><select id="chess-ai-level">
+        <option value="easy">AI：初級</option>
+        <option value="medium">AI：中級</option>
+        <option value="hard" selected>AI：高級</option>
+      </select><button id="restart-btn">重來</button></div>
+    <section id="ranked-panel" class="ranked-panel" hidden>
+      <div><strong>🏆 AI 排位挑戰</strong>
+        <p>只有登入帳號才會記錄積分並登上排行榜。勝敗決定基礎分，吃子與將軍等走法表現會影響技術加成。</p>
+      </div>
+      <div class="ranked-score"><span>目前積分</span><strong id="ranked-rating">1000</strong></div><button
+        id="ranked-leaderboard-btn" type="button">查看排行榜</button>
+      <div id="ranked-leaderboard" class="ranked-leaderboard" hidden></div>
+    </section>
+    <div id="chess-status" class="status">準備開始…</div>
+    <div class="chess-container">
+      <div class="couplet-couplet">觀棋不語真君子</div>
+      <div class="chess-wrapper">
+        <div id="check-banner" class="check-banner">⚠️ 將軍 CHECK！點一下這個提示可關閉</div>
+        <div id="coin-overlay" class="coin-overlay">
+          <div class="coin-container">
+            <div id="coin" class="coin">
+              <div class="coin-face front">紅</div>
+              <div class="coin-face back">黑</div>
+            </div>
+          </div>
+          <div id="coin-text-tip" class="coin-text-tip">🪙 擲硬幣決定先手...</div>
+        </div>
+        <div class="chess-board" id="chess-board"></div>
+      </div>
+      <div class="couplet-couplet">棋手無回大丈夫</div>
     </div>
-    <p id="account-status" class="account-status" role="status" aria-live="polite"></p>
+  </main>
+  <div class="modal" id="win-modal" hidden>
+    <div class="modal-content"><button class="modal-close" id="close-win" aria-label="關閉">×</button>
+      <div id="result-stamp" class="result-stamp" hidden aria-live="assertive">勝</div>
+      <h2 id="win-modal-title">🏆 遊戲結束！</h2>
+      <p id="winner-message"></p>
+      <div id="winner-reason" class="reason-box"></div>
+      <p id="rematch-status" aria-live="polite"></p>
+      <div class="rematch-actions"><button id="rematch-request-btn" type="button">詢問對方再玩一局</button><button
+          id="rematch-accept-btn" type="button" hidden>同意，再玩一局</button><button id="rematch-decline-btn" type="button"
+          class="btn-danger" hidden>不玩了，關閉房間</button><button id="confirm-win">確定</button></div>
+    </div>
   </div>
-</div>
-
-
-<div id="account-register-modal" class="account-modal" hidden role="dialog" aria-modal="true" aria-labelledby="account-register-title">
-  <div class="account-modal-card">
-    <button type="button" id="account-register-close" class="account-close-btn" aria-label="關閉註冊視窗">×</button>
-    <h2 id="account-register-title">📝 註冊棋手帳號</h2>
-    <p class="muted">請填寫電子郵件、密碼及使用者名稱。使用者名稱只在註冊時需要。</p>
-    <label for="register-email">電子郵件</label><input id="register-email" type="email" autocomplete="email" inputmode="email" required maxlength="254" placeholder="name@example.com">
-    <label for="register-password">密碼</label><input id="register-password" type="password" autocomplete="new-password" minlength="6" required placeholder="至少 6 個字元">
-    <label for="register-username">使用者名稱</label><input id="register-username" type="text" maxlength="18" autocomplete="nickname" required placeholder="設定你的棋手名稱">
-    <button id="account-register-submit" type="button">建立帳號</button>
-    <button id="account-register-back" type="button" class="secondary-btn">返回登入</button>
-    <p id="account-register-status" class="account-status" role="status" aria-live="polite"></p>
+  <div class="modal" id="confirm-modal" hidden>
+    <div class="modal-content">
+      <p id="confirm-message"></p>
+      <div class="modal-buttons"><button class="secondary-btn" id="cancel-confirm">取消</button><button
+          id="accept-confirm">確定</button></div>
+    </div>
   </div>
-</div>
+  <footer>Copyright © 2026 · Xiangqi</footer>
+  <script>
+    (function () {
+      const button = document.getElementById('theme-btn');
+      if (!button) return;
+      function applyTheme(theme) {
+        document.body.classList.toggle('dark-mode', theme === 'dark');
+        button.textContent = theme === 'dark' ? '☀️ 淺色' : '🌙 深色';
+        button.setAttribute('aria-label', theme === 'dark' ? '切換為淺色模式' : '切換為深色模式');
+      }
+      let saved = 'dark';
+      try { saved = localStorage.getItem('xiangqi-theme') || 'dark'; } catch (_) { }
+      applyTheme(saved === 'light' ? 'light' : 'dark');
+      button.addEventListener('click', function () {
+        const next = document.body.classList.contains('dark-mode') ? 'light' : 'dark';
+        applyTheme(next);
+        try { localStorage.setItem('xiangqi-theme', next); } catch (_) { }
+      });
+    })();
+  </script>
+  <script>
+    (function () {
+      const button = document.getElementById('screen-awake-btn');
+      if (!button) return;
+      let sentinel = null, enabled = false;
+      function paint() { button.textContent = enabled ? (sentinel ? '☀️ 常亮中' : '⏳ 正在啟用常亮…') : '🔆 保持螢幕常亮'; button.setAttribute('aria-pressed', String(enabled)); }
+      async function acquire() {
+        if (!enabled || !('wakeLock' in navigator)) return;
+        try { if (sentinel) await sentinel.release().catch(() => { }); sentinel = await navigator.wakeLock.request('screen'); sentinel.addEventListener('release', () => { sentinel = null; paint(); }); paint(); }
+        catch (e) { sentinel = null; paint(); button.title = '瀏覽器目前無法保持螢幕常亮，請保持頁面在前景並確認瀏覽器支援此功能。'; }
+      }
+      button.addEventListener('click', async () => {
+        if (!('wakeLock' in navigator)) { window.alert('目前瀏覽器不支援螢幕常亮功能。請使用最新版 Chrome 或 Edge，並透過 HTTPS 開啟網站。'); return; }
+        enabled = !enabled;
+        if (!enabled) { if (sentinel) { const old = sentinel; sentinel = null; try { await old.release(); } catch (_) { } } paint(); return; }
+        paint(); await acquire();
+        if (!sentinel) { enabled = false; paint(); window.alert('無法啟用螢幕常亮。請確認網站以 HTTPS 開啟，且頁面目前在前景。'); }
+      });
+      document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && enabled && !sentinel) acquire(); });
+      paint();
+    })();
+  </script>
+  <script type="module">
+    import { firebaseConfig } from './js/firebase-config.js';
+    const XIANGQI_TEST_KEY = 'ji32k7au4a83'; const XIANGQI_ADMIN_UID = '7PHHdOC8IWYNqbGqaajq8j8DK822'; const xiangqiTestKeyRequested = new URLSearchParams(location.search).get('key') === XIANGQI_TEST_KEY; let xiangqiTestBypass = false; function removeXiangqiTestKey() { const u = new URL(location.href); u.searchParams.delete('key'); history.replaceState(history.state, '', u.pathname + u.search + u.hash) } function preserveXiangqiTestKey(root = document) { if (!xiangqiTestBypass) return; root.querySelectorAll?.('a[href]').forEach(a => { try { const u = new URL(a.href, location.href); if (u.origin === location.origin && !u.searchParams.has('key')) { u.searchParams.set('key', XIANGQI_TEST_KEY); a.href = u.href } } catch { } }) }
+    (async () => { try { const [appM, authM, dbM] = await Promise.all([import('https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js'), import('https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js'), import('https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js')]); if (xiangqiTestKeyRequested) { try { const accountApp = appM.getApps().find(a => a.name === 'xiangqi-player-accounts') || appM.initializeApp(firebaseConfig, 'xiangqi-player-accounts'); const accountAuth = authM.getAuth(accountApp); let stopAccount; const accountUser = await new Promise(resolve => { stopAccount = authM.onAuthStateChanged(accountAuth, u => { stopAccount?.(); resolve(u); }); }); if (accountUser && !accountUser.isAnonymous && accountUser.uid === XIANGQI_ADMIN_UID) { xiangqiTestBypass = true; preserveXiangqiTestKey(); new MutationObserver(ms => ms.forEach(m => m.addedNodes.forEach(n => { if (n.nodeType === 1) { preserveXiangqiTestKey(n); if (n.matches?.('a[href]')) preserveXiangqiTestKey(n.parentNode || document) } }))).observe(document.documentElement, { childList: true, subtree: true }); document.addEventListener('click', e => { const a = e.target.closest?.('a[href]'); if (a) preserveXiangqiTestKey(a.parentNode || document) }, true); } else removeXiangqiTestKey(); } catch (e) { console.warn('測試模式管理員驗證失敗', e); removeXiangqiTestKey(); } } const app = appM.getApps().find(a => a.name === 'xiangqi-player-accounts') || appM.initializeApp(firebaseConfig, 'xiangqi-player-accounts'); const auth = authM.getAuth(app); try { await authM.setPersistence(auth, authM.browserLocalPersistence) } catch { } let stop; const u = await new Promise(resolve => { stop = authM.onAuthStateChanged(auth, x => { stop?.(); resolve(x) }) }); if (!u) await authM.signInAnonymously(auth); const db = dbM.getDatabase(app); let siteCloseTimer = null, maintenanceWarningTimer = null, maintenanceNoticeKey = '', latestSiteControl = {}; function renderTopStatus(control = latestSiteControl) { const banner = document.getElementById('site-announcement'), label = document.getElementById('site-announcement-label'), text = document.getElementById('site-announcement-text'); if (!banner || !label || !text) return; if (xiangqiTestBypass) { banner.classList.remove('is-countdown'); label.textContent = '🧪 測試模式'; text.textContent = '測試模式已啟用：維護期間仍可進入遊戲。'; banner.hidden = false; document.body.classList.add('has-site-announcement'); return } const closeAt = Number(control.autoCloseAt || 0), remaining = closeAt - Date.now(); if (control.playEnabled !== false && closeAt > 0 && remaining > 0) { const total = Math.ceil(remaining / 1000), h = Math.floor(total / 3600), m = Math.floor((total % 3600) / 60), s = total % 60; label.textContent = '⏳ 維護倒數'; text.textContent = h > 0 ? `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}` : `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`; banner.classList.add('is-countdown'); banner.hidden = false; document.body.classList.add('has-site-announcement'); return } banner.classList.remove('is-countdown'); label.textContent = '📢 公告'; const message = String(control.announcement || '').trim(); text.textContent = message; banner.hidden = !message; document.body.classList.toggle('has-site-announcement', !!message) } renderTopStatus(); setInterval(() => { renderTopStatus(); const closeAt = Number(latestSiteControl.autoCloseAt || 0); if (latestSiteControl.playEnabled !== false && closeAt > Date.now() && closeAt - Date.now() <= 60000) showMaintenanceNotice(`scheduled-${closeAt}`) }, 1000); function showMaintenanceNotice(key) { if (maintenanceNoticeKey === key || document.getElementById('maintenance-warning-dialog')) return; maintenanceNoticeKey = key; const style = document.createElement('style'); style.textContent = '#maintenance-warning-dialog{position:fixed;inset:0;z-index:100001;background:#000b;display:flex;align-items:center;justify-content:center;padding:18px;box-sizing:border-box}#maintenance-warning-dialog .maintenance-warning-card{width:min(520px,100%);background:#171717;color:#fff;border:2px solid #e5b93f;border-radius:18px;padding:24px;box-shadow:0 18px 70px #0009;text-align:center}#maintenance-warning-dialog h2{margin:0 0 14px;color:#ffd54f;font-size:clamp(22px,5vw,30px)}#maintenance-warning-dialog p{font-size:clamp(17px,3.8vw,21px);line-height:1.7;margin:0 0 20px}#maintenance-warning-dialog button{border:0;border-radius:10px;padding:12px 22px;background:#ffd54f;color:#241b00;font-weight:800;font-size:16px;cursor:pointer}'; document.head.appendChild(style); const dialog = document.createElement('div'); dialog.id = 'maintenance-warning-dialog'; dialog.setAttribute('role', 'alertdialog'); dialog.setAttribute('aria-modal', 'true'); dialog.innerHTML = '<div class="maintenance-warning-card"><h2>⚠️ 系統維護提醒</h2><p>即將進行網站維護！請盡快結束目前對局。維護開始後，這場棋局將不會被儲存。</p><button type="button" id="maintenance-warning-ok">我知道了</button></div>'; document.body.appendChild(dialog); document.getElementById('maintenance-warning-ok').addEventListener('click', () => dialog.remove()) } let trackedVisitorUid = '', trackedCurrentRef = null, trackedVisitorName = '', trackedVisitorType = 'device'; async function trackVisitor(visitorUser) { if (!visitorUser) return; const uid = visitorUser.uid; if (uid === trackedVisitorUid) return; if (trackedCurrentRef) dbM.update(trackedCurrentRef, { online: false, lastSeen: dbM.serverTimestamp() }).catch(() => { }); trackedVisitorUid = uid; const currentRef = dbM.ref(db, `siteVisitors/current/${uid}`); trackedCurrentRef = currentRef; let profileName = ''; if (!visitorUser.isAnonymous) { try { const ps = await dbM.get(dbM.ref(db, `users/${uid}/profile`)); profileName = ps.val()?.displayName || '' } catch { } } const name = (profileName || localStorage.getItem('xiangqi-nickname') || (visitorUser.isAnonymous ? '裝置訪客' : '已登入棋手')).replace(/[<>]/g, '').slice(0, 18); const visitorType = visitorUser.isAnonymous ? 'device' : 'account'; trackedVisitorName = name; trackedVisitorType = visitorType; await dbM.set(currentRef, { uid, name, visitorType, online: true, lastSeen: dbM.serverTimestamp(), page: '棋盤' }); try { await dbM.onDisconnect(currentRef).update({ online: false, lastSeen: dbM.serverTimestamp() }) } catch { } } authM.onAuthStateChanged(auth, u => { if (u) trackVisitor(u).catch(e => console.warn('訪客紀錄更新失敗', e)) }); document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && trackedCurrentRef) dbM.update(trackedCurrentRef, { name: trackedVisitorName, visitorType: trackedVisitorType, online: true, lastSeen: dbM.serverTimestamp(), page: '棋盤' }).catch(() => { }) }); setInterval(() => { if (document.visibilityState === 'visible' && trackedCurrentRef) dbM.update(trackedCurrentRef, { name: trackedVisitorName, visitorType: trackedVisitorType, online: true, lastSeen: dbM.serverTimestamp(), page: '棋盤' }).catch(() => { }) }, 45000); dbM.onValue(dbM.ref(db, 'siteControl'), snap => { const c = snap.val() || {}; latestSiteControl = c; renderTopStatus(c); if (siteCloseTimer) { clearTimeout(siteCloseTimer); siteCloseTimer = null } if (maintenanceWarningTimer) { clearTimeout(maintenanceWarningTimer); maintenanceWarningTimer = null } const closeAt = Number(c.autoCloseAt || 0); const closed = !xiangqiTestBypass && (c.playEnabled === false || (closeAt > 0 && Date.now() >= closeAt)); if (xiangqiTestBypass) { document.getElementById('site-closed-overlay')?.remove(); } if (c.playEnabled === false || xiangqiTestBypass || !(closeAt > Date.now())) { document.getElementById('maintenance-warning-dialog')?.remove(); maintenanceNoticeKey = ''; } else if (!xiangqiTestBypass && closeAt > Date.now()) { const noticeKey = 'scheduled-' + closeAt; maintenanceWarningTimer = setTimeout(() => showMaintenanceNotice(noticeKey), Math.max(0, closeAt - Date.now() - 60000)); } if (!xiangqiTestBypass && closeAt > Date.now()) siteCloseTimer = setTimeout(() => { const overlayNow = document.getElementById('site-closed-overlay'); if (!overlayNow) { const o = document.createElement('div'); o.id = 'site-closed-overlay'; o.className = 'site-closed-overlay'; o.innerHTML = '<div class="site-closed-card"><h1>⛔ 網站暫停遊玩</h1><p id="site-closed-message"></p><a href="admin.html">⚙ 管理員入口</a><p><a href="index.html" style="background:transparent;color:#f0c54b">返回大廳</a></p></div>'; document.body.appendChild(o) } const msg = document.getElementById('site-closed-message'); if (msg) msg.textContent = c.maintenanceMessage || '管理員目前暫停了遊戲，請稍後再來。' }, Math.min(closeAt - Date.now() + 50, 2147483000)); let overlay = document.getElementById('site-closed-overlay'); if (closed) { if (!overlay) { overlay = document.createElement('div'); overlay.id = 'site-closed-overlay'; overlay.className = 'site-closed-overlay'; overlay.innerHTML = '<div class="site-closed-card"><h1>⛔ 網站暫停遊玩</h1><p id="site-closed-message">管理員目前暫停了遊戲，請稍後再來。</p><a href="admin.html">⚙ 管理員入口</a><p><a href="index.html" style="background:transparent;color:#f0c54b">返回大廳</a></p></div>'; document.body.appendChild(overlay) } document.getElementById('site-closed-message').textContent = c.maintenanceMessage || '管理員目前暫停了遊戲，請稍後再來。'; } else if (overlay) overlay.remove(); }, e => console.warn('無法讀取網站開放狀態', e)); } catch (e) { console.warn('網站狀態檢查失敗，保留遊戲頁面', e) } })();
+  </script>
+  <div id="account-modal" class="account-modal" hidden role="dialog" aria-modal="true"
+    aria-labelledby="account-modal-title">
+    <div class="account-modal-card">
+      <button type="button" id="account-close-btn" class="account-close-btn" aria-label="關閉帳號視窗">×</button>
+      <h2 id="account-modal-title">👤 棋手帳號</h2>
+      <p id="account-subtitle" class="muted">註冊帳號即可保存單機與多人對戰紀錄。</p>
+      <div id="account-auth-fields">
+        <label for="account-email">電子郵件</label><input id="account-email" type="email" autocomplete="email"
+          inputmode="email" required maxlength="254" placeholder="name@example.com">
+        <label for="account-password">密碼</label><input id="account-password" type="password"
+          autocomplete="current-password" minlength="6" required placeholder="至少 6 個字元">
+        <label id="account-name-label" for="account-username" hidden>使用者名稱</label><input id="account-username"
+          type="text" maxlength="18" autocomplete="nickname" placeholder="設定你的棋手名稱" hidden>
+        <div id="account-auth-actions" class="account-actions"><button id="account-login-btn" type="button">登入</button>
+        </div>
+        <p class="account-register-prompt">還沒有註冊過帳號？<button id="account-register-btn" type="button"
+            class="account-text-link">點我註冊帳號</button></p><button id="account-setup-save-btn" type="button"
+          hidden>儲存使用者名稱</button>
+      </div>
+      <div id="account-profile-area" hidden>
+        <p class="account-current-user">目前使用者：<strong id="account-profile-name"></strong></p>
+        <label for="account-edit-name">修改使用者名稱</label><input id="account-edit-name" type="text" maxlength="18"
+          autocomplete="nickname" placeholder="輸入新名稱">
+        <button id="account-save-name-btn" type="button">儲存名稱</button>
+        <section class="account-history-section" aria-labelledby="account-ai-history-title">
+          <h3 id="account-ai-history-title">🤖 1. 打 AI 戰績</h3>
+          <div class="account-stats-grid">
+            <div><strong id="account-ai-played">0</strong><span>對戰場數</span></div>
+            <div><strong id="account-ai-wins">0</strong><span>勝場</span></div>
+            <div><strong id="account-ai-losses">0</strong><span>敗場</span></div>
+            <div><strong id="account-ai-draws">0</strong><span>平手</span></div>
+          </div>
+          <div id="account-ai-match-list" class="account-match-list">
+            <p class="muted small">登入後會載入 AI 戰績。</p>
+          </div>
+        </section>
+        <section class="account-history-section" aria-labelledby="account-online-history-title">
+          <h3 id="account-online-history-title">🌐 2. 連線對打戰績</h3>
+          <div class="account-stats-grid">
+            <div><strong id="account-online-played">0</strong><span>對戰場數</span></div>
+            <div><strong id="account-online-wins">0</strong><span>勝場</span></div>
+            <div><strong id="account-online-losses">0</strong><span>敗場</span></div>
+            <div><strong id="account-online-draws">0</strong><span>平手</span></div>
+          </div>
+          <div id="account-online-match-list" class="account-match-list">
+            <p class="muted small">登入後會載入連線戰績。</p>
+          </div>
+        </section>
+        <button id="account-logout-btn" type="button" class="secondary-btn">登出</button>
+      </div>
+      <p id="account-status" class="account-status" role="status" aria-live="polite"></p>
+    </div>
+  </div>
 
-<script type="module" src="js/chess.js?v=20261028-restart-confirm-v46"></script>
-</body></html>
+
+  <div id="account-register-modal" class="account-modal" hidden role="dialog" aria-modal="true"
+    aria-labelledby="account-register-title">
+    <div class="account-modal-card">
+      <button type="button" id="account-register-close" class="account-close-btn" aria-label="關閉註冊視窗">×</button>
+      <h2 id="account-register-title">📝 註冊棋手帳號</h2>
+      <p class="muted">請填寫電子郵件、密碼及使用者名稱。使用者名稱只在註冊時需要。</p>
+      <label for="register-email">電子郵件</label><input id="register-email" type="email" autocomplete="email"
+        inputmode="email" required maxlength="254" placeholder="name@example.com">
+      <label for="register-password">密碼</label><input id="register-password" type="password" autocomplete="new-password"
+        minlength="6" required placeholder="至少 6 個字元">
+      <label for="register-username">使用者名稱</label><input id="register-username" type="text" maxlength="18"
+        autocomplete="nickname" required placeholder="設定你的棋手名稱">
+      <button id="account-register-submit" type="button">建立帳號</button>
+      <button id="account-register-back" type="button" class="secondary-btn">返回登入</button>
+      <p id="account-register-status" class="account-status" role="status" aria-live="polite"></p>
+    </div>
+  </div>
+
+  <script type="module" src="js/chess.js?v=20261028-restart-confirm-v46"></script>
+</body>
+
+</html>

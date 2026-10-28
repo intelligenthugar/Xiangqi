@@ -3,46 +3,46 @@ const TEST_KEY = 'ji32k7au4a83';
 const ADMIN_UID = '7PHHdOC8IWYNqbGqaajq8j8DK822';
 const testKeyRequested = new URLSearchParams(location.search).get('key') === TEST_KEY;
 let testBypass = false;
-function removeTestKeyFromUrl(){const u=new URL(location.href);u.searchParams.delete('key');history.replaceState(history.state,'',u.pathname+u.search+u.hash);}
-async function authorizeTestMode(){
-  if(!testKeyRequested)return;
-  try{
-    const [appMod,authMod]=await Promise.all([import('https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js'),import('https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js')]);
-    const app=appMod.getApps().find(a=>a.name==='xiangqi-player-accounts')||appMod.initializeApp(firebaseConfig,'xiangqi-player-accounts');
-    const auth=authMod.getAuth(app); let stop;
-    const user=await new Promise(resolve=>{stop=authMod.onAuthStateChanged(auth,u=>{stop?.();resolve(u);});});
-    if(user&&!user.isAnonymous&&user.uid===ADMIN_UID){
-      testBypass=true;
-      function preserveTestKey(root=document){root.querySelectorAll?.('a[href]').forEach(a=>{try{const u=new URL(a.href,location.href);if(u.origin===location.origin&&!u.searchParams.has('key')){u.searchParams.set('key',TEST_KEY);a.href=u.href;}}catch{}});}
+function removeTestKeyFromUrl() { const u = new URL(location.href); u.searchParams.delete('key'); history.replaceState(history.state, '', u.pathname + u.search + u.hash); }
+async function authorizeTestMode() {
+  if (!testKeyRequested) return;
+  try {
+    const [appMod, authMod] = await Promise.all([import('https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js'), import('https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js')]);
+    const app = appMod.getApps().find(a => a.name === 'xiangqi-player-accounts') || appMod.initializeApp(firebaseConfig, 'xiangqi-player-accounts');
+    const auth = authMod.getAuth(app); let stop;
+    const user = await new Promise(resolve => { stop = authMod.onAuthStateChanged(auth, u => { stop?.(); resolve(u); }); });
+    if (user && !user.isAnonymous && user.uid === ADMIN_UID) {
+      testBypass = true;
+      function preserveTestKey(root = document) { root.querySelectorAll?.('a[href]').forEach(a => { try { const u = new URL(a.href, location.href); if (u.origin === location.origin && !u.searchParams.has('key')) { u.searchParams.set('key', TEST_KEY); a.href = u.href; } } catch { } }); }
       preserveTestKey();
-      new MutationObserver(ms=>ms.forEach(m=>m.addedNodes.forEach(n=>{if(n.nodeType===1){preserveTestKey(n);if(n.matches?.('a[href]'))preserveTestKey(n.parentNode||document);}}))).observe(document.documentElement,{childList:true,subtree:true});
-      document.addEventListener('click',e=>{const a=e.target.closest?.('a[href]');if(a)preserveTestKey(a.parentNode||document);},true);
-    }else removeTestKeyFromUrl();
-  }catch(e){console.warn('測試模式管理員驗證失敗',e);removeTestKeyFromUrl();}
+      new MutationObserver(ms => ms.forEach(m => m.addedNodes.forEach(n => { if (n.nodeType === 1) { preserveTestKey(n); if (n.matches?.('a[href]')) preserveTestKey(n.parentNode || document); } }))).observe(document.documentElement, { childList: true, subtree: true });
+      document.addEventListener('click', e => { const a = e.target.closest?.('a[href]'); if (a) preserveTestKey(a.parentNode || document); }, true);
+    } else removeTestKeyFromUrl();
+  } catch (e) { console.warn('測試模式管理員驗證失敗', e); removeTestKeyFromUrl(); }
 }
 const $ = id => document.getElementById(id);
 let db = null, api = null, roomsCache = [], allRoomsCache = [], roomsListenerStarted = false;
-try { const savedRoom = JSON.parse(localStorage.getItem('xiangqi-active-room') || 'null'); if (savedRoom?.code) { $('resume-room-container').hidden = false; $('resume-room-link').href = `chess.html?mode=online&room=${encodeURIComponent(savedRoom.code)}`; $('resume-room-link').textContent = `恢復房間 ${savedRoom.code}`; } } catch {}
-function escapeHtml(value) { return String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
-function formatTime(value) { try { return new Date(Number(value)).toLocaleString('zh-TW', {month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}); } catch { return '時間未知'; } }
+try { const savedRoom = JSON.parse(localStorage.getItem('xiangqi-active-room') || 'null'); if (savedRoom?.code) { $('resume-room-container').hidden = false; $('resume-room-link').href = `chess.html?mode=online&room=${encodeURIComponent(savedRoom.code)}`; $('resume-room-link').textContent = `恢復房間 ${savedRoom.code}`; } } catch { }
+function escapeHtml(value) { return String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+function formatTime(value) { try { return new Date(Number(value)).toLocaleString('zh-TW', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }); } catch { return '時間未知'; } }
 function renderRoomList(target, includeNonWaiting = false) {
   const rooms = roomsCache.filter(r => includeNonWaiting || r.status === 'waiting');
   if (!rooms.length) { target.innerHTML = '<p class="muted small">目前沒有符合條件的公開房間。</p>'; return; }
-  target.innerHTML = rooms.sort((a,b) => Number(b.createdAt||0)-Number(a.createdAt||0)).map(r => {
+  target.innerHTML = rooms.sort((a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0)).map(r => {
     const status = r.status === 'waiting' ? '等待加入' : r.status === 'playing' ? '對局中' : '已結束';
     const join = r.status === 'waiting' ? `<a class="room-join-link" href="chess.html?mode=online&room=${encodeURIComponent(r.code)}">輸入／加入</a>` : '<span class="muted small">不可加入</span>';
-    return `<article class="public-room-card"><div class="public-room-main"><strong class="room-code">${escapeHtml(r.code)}</strong><span class="room-status">${status}</span><span class="muted small">房主：${escapeHtml(r.hostName||'棋手')}</span><span class="muted small">建立：${escapeHtml(formatTime(r.createdAt))}</span><span class="muted small">人數：${Number(r.playersCount||1)}/2　${r.hasPassword?'🔒 需要密碼':'🔓 無密碼'}</span></div><div>${join}</div></article>`;
+    return `<article class="public-room-card"><div class="public-room-main"><strong class="room-code">${escapeHtml(r.code)}</strong><span class="room-status">${status}</span><span class="muted small">房主：${escapeHtml(r.hostName || '棋手')}</span><span class="muted small">建立：${escapeHtml(formatTime(r.createdAt))}</span><span class="muted small">人數：${Number(r.playersCount || 1)}/2　${r.hasPassword ? '🔒 需要密碼' : '🔓 無密碼'}</span></div><div>${join}</div></article>`;
   }).join('');
 }
 function renderAdminRoomList(target) {
-  const rooms = allRoomsCache.slice().sort((a,b) => Number(b.createdAt||0)-Number(a.createdAt||0));
+  const rooms = allRoomsCache.slice().sort((a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0));
   if (!rooms.length) { target.innerHTML = '<p class="muted small">目前沒有房間（公開或私人）。</p>'; return; }
   target.innerHTML = rooms.map(r => {
-    const status = r.status === 'waiting' ? '等待加入' : r.status === 'playing' ? '對局中' : r.status === 'finished' ? '已結束' : r.status === 'closed' ? '已關閉' : escapeHtml(r.status||'狀態未知');
+    const status = r.status === 'waiting' ? '等待加入' : r.status === 'playing' ? '對局中' : r.status === 'finished' ? '已結束' : r.status === 'closed' ? '已關閉' : escapeHtml(r.status || '狀態未知');
     const visibility = r.visibility === 'private' ? '🔒 私人房間' : '🌐 公開房間';
-    const players = `${r.playersCount||((r.players?.black)?2:1)}/2`;
+    const players = `${r.playersCount || ((r.players?.black) ? 2 : 1)}/2`;
     const join = r.status === 'waiting' ? `<a class="room-join-link" href="chess.html?mode=online&room=${encodeURIComponent(r.code)}">查看／加入</a>` : '<span class="muted small">不可加入</span>';
-    return `<article class="public-room-card"><div class="public-room-main"><strong class="room-code">${escapeHtml(r.code)}</strong><span class="room-status">${visibility} · ${status}</span><span class="muted small">房主：${escapeHtml(r.hostName||r.playerNames?.red||'棋手')}</span><span class="muted small">建立：${escapeHtml(formatTime(r.createdAt))}</span><span class="muted small">人數：${players}　${r.hasPassword||r.settings?.hasPassword?'🔒 需要密碼':'🔓 無密碼'}</span></div><div>${join}</div></article>`;
+    return `<article class="public-room-card"><div class="public-room-main"><strong class="room-code">${escapeHtml(r.code)}</strong><span class="room-status">${visibility} · ${status}</span><span class="muted small">房主：${escapeHtml(r.hostName || r.playerNames?.red || '棋手')}</span><span class="muted small">建立：${escapeHtml(formatTime(r.createdAt))}</span><span class="muted small">人數：${players}　${r.hasPassword || r.settings?.hasPassword ? '🔒 需要密碼' : '🔓 無密碼'}</span></div><div>${join}</div></article>`;
   }).join('');
 }
 let siteControlEnabled = true;
@@ -85,8 +85,8 @@ function renderTopStatus(control = latestSiteControl) {
     const h = Math.floor(total / 3600), m = Math.floor((total % 3600) / 60), s = total % 60;
     label.textContent = '⏳ 維護倒數';
     text.textContent = h > 0
-      ? `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`
-      : `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+      ? `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+      : `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
     banner.classList.add('is-countdown');
     banner.hidden = false;
     document.body.classList.add('has-site-announcement');
@@ -111,8 +111,8 @@ function showMaintenanceNotice(key) {
   document.head.appendChild(style);
   const dialog = document.createElement('div');
   dialog.id = 'maintenance-warning-dialog';
-  dialog.setAttribute('role','alertdialog');
-  dialog.setAttribute('aria-modal','true');
+  dialog.setAttribute('role', 'alertdialog');
+  dialog.setAttribute('aria-modal', 'true');
   dialog.innerHTML = '<div class="maintenance-warning-card"><h2>⚠️ 系統維護提醒</h2><p>即將進行網站維護！請盡快結束目前對局。維護開始後，這場棋局將不會被儲存。</p><button type="button" id="maintenance-warning-ok">我知道了</button></div>';
   document.body.appendChild(dialog);
   document.getElementById('maintenance-warning-ok').addEventListener('click', () => dialog.remove());
@@ -144,8 +144,8 @@ function applySiteControl(control = {}) {
   if (maintenance) { maintenance.hidden = siteControlEnabled; if (control.maintenanceMessage) $('site-maintenance-message').textContent = control.maintenanceMessage; }
   document.querySelectorAll('a.mode-card, #resume-room-link, .room-join-link').forEach(link => {
     if (link.id === 'admin-fab' || link.href.includes('admin.html')) return;
-    if (!siteControlEnabled) { link.dataset.siteDisabled = '1'; link.setAttribute('aria-disabled','true'); link.style.opacity='.45'; link.style.pointerEvents='none'; }
-    else if (link.dataset.siteDisabled) { delete link.dataset.siteDisabled; link.removeAttribute('aria-disabled'); link.style.opacity=''; link.style.pointerEvents=''; }
+    if (!siteControlEnabled) { link.dataset.siteDisabled = '1'; link.setAttribute('aria-disabled', 'true'); link.style.opacity = '.45'; link.style.pointerEvents = 'none'; }
+    else if (link.dataset.siteDisabled) { delete link.dataset.siteDisabled; link.removeAttribute('aria-disabled'); link.style.opacity = ''; link.style.pointerEvents = ''; }
   });
   if (!siteControlEnabled) {
     if ($('public-rooms-status')) $('public-rooms-status').textContent = '網站目前暫停遊玩；管理員仍可透過右下角 ⚙ 入口登入管理中心。';
@@ -163,10 +163,10 @@ async function startSiteTracking() {
     const app = appMod.getApps().find(a => a.name === 'xiangqi-player-accounts') || appMod.initializeApp(firebaseConfig, 'xiangqi-player-accounts');
     const auth = authMod.getAuth(app);
     const database = dbMod.getDatabase(app);
-    try { await authMod.setPersistence(auth, authMod.browserLocalPersistence); } catch {}
-    dbMod.onValue(dbMod.ref(database, 'siteControl'), snap => applySiteControl(snap.val() || {playEnabled:true,announcement:''}), error => {
+    try { await authMod.setPersistence(auth, authMod.browserLocalPersistence); } catch { }
+    dbMod.onValue(dbMod.ref(database, 'siteControl'), snap => applySiteControl(snap.val() || { playEnabled: true, announcement: '' }), error => {
       console.warn('網站設定讀取失敗', error);
-      applySiteControl({playEnabled:true,announcement:''});
+      applySiteControl({ playEnabled: true, announcement: '' });
       if ($('public-rooms-status')) $('public-rooms-status').textContent = '無法讀取網站公告／開放狀態；請確認 Firebase Rules。';
     });
 
@@ -175,22 +175,22 @@ async function startSiteTracking() {
       if (!currentUser) { try { await authMod.signInAnonymously(auth); } catch (e) { console.warn('匿名訪客初始化失敗', e); } return; }
       const uid = currentUser.uid;
       if (uid === trackedUid) return;
-      if (trackedCurrentRef) dbMod.update(trackedCurrentRef, {online:false,lastSeen:dbMod.serverTimestamp()}).catch(()=>{});
+      if (trackedCurrentRef) dbMod.update(trackedCurrentRef, { online: false, lastSeen: dbMod.serverTimestamp() }).catch(() => { });
       trackedUid = uid;
       const currentRef = dbMod.ref(database, `siteVisitors/current/${uid}`);
       trackedCurrentRef = currentRef;
       if (heartbeat) clearInterval(heartbeat);
       let profileName = '';
       if (!currentUser.isAnonymous) {
-        try { const profileSnap = await dbMod.get(dbMod.ref(database, `users/${uid}/profile`)); profileName = profileSnap.val()?.displayName || ''; } catch {}
+        try { const profileSnap = await dbMod.get(dbMod.ref(database, `users/${uid}/profile`)); profileName = profileSnap.val()?.displayName || ''; } catch { }
       }
-      const displayName = (profileName || localStorage.getItem('xiangqi-nickname') || (currentUser.isAnonymous ? '裝置訪客' : '已登入棋手')).replace(/[<>]/g,'').slice(0,18);
+      const displayName = (profileName || localStorage.getItem('xiangqi-nickname') || (currentUser.isAnonymous ? '裝置訪客' : '已登入棋手')).replace(/[<>]/g, '').slice(0, 18);
       const visitorType = currentUser.isAnonymous ? 'device' : 'account';
-      await dbMod.set(currentRef, {uid, name:displayName, visitorType, online:true, lastSeen:dbMod.serverTimestamp(), page:'大廳'});
-      try { await dbMod.onDisconnect(currentRef).update({online:false,lastSeen:dbMod.serverTimestamp()}); } catch {}
+      await dbMod.set(currentRef, { uid, name: displayName, visitorType, online: true, lastSeen: dbMod.serverTimestamp(), page: '大廳' });
+      try { await dbMod.onDisconnect(currentRef).update({ online: false, lastSeen: dbMod.serverTimestamp() }); } catch { }
       const now = Date.now();
 
-      const updatePresence = () => { if (document.visibilityState === 'visible' && trackedUid === uid) dbMod.update(currentRef,{name:displayName,visitorType,online:true,lastSeen:dbMod.serverTimestamp(),page:'大廳'}).catch(()=>{}); };
+      const updatePresence = () => { if (document.visibilityState === 'visible' && trackedUid === uid) dbMod.update(currentRef, { name: displayName, visitorType, online: true, lastSeen: dbMod.serverTimestamp(), page: '大廳' }).catch(() => { }); };
       document.addEventListener('visibilitychange', updatePresence);
       heartbeat = setInterval(updatePresence, 45000);
     };
@@ -212,7 +212,7 @@ async function initRooms() {
       import('https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js'),
       import('https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js')
     ]);
-    api = {...appMod, ...authMod, ...dbMod};
+    api = { ...appMod, ...authMod, ...dbMod };
     const app = api.initializeApp(firebaseConfig);
     const auth = api.getAuth(app);
     db = api.getDatabase(app);
@@ -223,8 +223,8 @@ async function initRooms() {
     $('public-rooms-status').textContent = '正在讀取公開房間…';
     api.onValue(api.ref(db, 'publicRooms'), snap => {
       const value = snap.val() || {};
-      roomsCache = Object.entries(value).map(([code, r]) => ({...r, code: r.code || code}));
-      $('public-rooms-status').textContent = `目前公開房間：${roomsCache.filter(r=>r.status==='waiting').length} 間等待加入`;
+      roomsCache = Object.entries(value).map(([code, r]) => ({ ...r, code: r.code || code }));
+      $('public-rooms-status').textContent = `目前公開房間：${roomsCache.filter(r => r.status === 'waiting').length} 間等待加入`;
       renderRoomList($('public-rooms-list'));
     }, error => {
       $('public-rooms-status').textContent = error?.code?.includes('permission-denied')
@@ -237,7 +237,7 @@ async function initRooms() {
       const publicByCode = new Map(roomsCache.map(r => [r.code, r]));
       allRoomsCache = Object.entries(value).map(([code, room]) => {
         const pub = publicByCode.get(code) || {};
-        return {...pub, code, ...room, visibility: room.settings?.visibility || (pub.hostUid ? 'public' : 'private'), hostName: pub.hostName || room.playerNames?.red || '棋手', playersCount: room.players?.black ? 2 : 1, hasPassword: !!(room.settings?.hasPassword || room.settings?.passwordHash)};
+        return { ...pub, code, ...room, visibility: room.settings?.visibility || (pub.hostUid ? 'public' : 'private'), hostName: pub.hostName || room.playerNames?.red || '棋手', playersCount: room.players?.black ? 2 : 1, hasPassword: !!(room.settings?.hasPassword || room.settings?.passwordHash) };
       });
     }, error => {
       console.warn('管理員房間清單讀取失敗', error);
@@ -251,10 +251,10 @@ $('refresh-rooms-btn')?.addEventListener('click', () => {
   if (!db || !api) { initRooms(); return; }
   api.get(api.ref(db, 'publicRooms')).then(snap => {
     const value = snap.val() || {};
-    roomsCache = Object.entries(value).map(([code,r])=>({...r,code:r.code||code}));
-    $('public-rooms-status').textContent = `目前公開房間：${roomsCache.filter(r=>r.status==='waiting').length} 間等待加入`;
+    roomsCache = Object.entries(value).map(([code, r]) => ({ ...r, code: r.code || code }));
+    $('public-rooms-status').textContent = `目前公開房間：${roomsCache.filter(r => r.status === 'waiting').length} 間等待加入`;
     renderRoomList($('public-rooms-list'));
-  }).catch(e => $('public-rooms-status').textContent = `讀取失敗：${e.message||e}`);
+  }).catch(e => $('public-rooms-status').textContent = `讀取失敗：${e.message || e}`);
 });
 
 await authorizeTestMode();
@@ -274,13 +274,13 @@ if (tutorialRoot) {
   }));
 
   const pieceLessons = {
-    general: {icon:'帥',title:'帥／將',description:'每次沿直線走一格，只能在九宮內活動。將與帥不能直接照面。',tip:'小提醒：保護主帥是第一要務，別讓它暴露在車、炮的攻擊線上。'},
-    advisor: {icon:'仕',title:'仕／士',description:'每次沿斜線走一格，只能在九宮內活動。它主要負責守護將／帥。',tip:'小提醒：不要為了吃小棋而隨意把士、仕移離主帥身邊。'},
-    elephant: {icon:'相',title:'相／象',description:'每次斜走兩格，俗稱「田」字走法；中間的格子若有棋子擋住就不能走，而且不能過河。',tip:'小提醒：象眼被塞住就不能走，走之前記得檢查中間點。'},
-    rook: {icon:'俥',title:'俥／車',description:'可以沿橫線或直線走任意格，但路徑中不能穿過其他棋子。車也沿直線吃子。',tip:'小提醒：車的威力很大，盡早讓車出動並打開通道。'},
-    horse: {icon:'傌',title:'傌／馬',description:'走「日」字：先直走一格再斜走一格。若第一步的相鄰格被棋子堵住，就叫「蹩馬腿」，不能走那個方向。',tip:'小提醒：馬不是可以跳過所有棋子的棋子，記得注意馬腿。'},
-    cannon: {icon:'炮',title:'炮／包',description:'不吃子時像車一樣沿直線移動；吃子時必須與目標之間恰好隔著一顆棋子，這顆棋子就是炮架。',tip:'小提醒：炮架很重要，沒有隔子就不能吃；隔了兩顆也不能吃。'},
-    soldier: {icon:'兵',title:'兵／卒',description:'過河前只能向前走一格；過河後可以向前或左右走一格，但永遠不能後退。',tip:'小提醒：兵卒過河後更有攻擊力，別忽略它們的推進。'}
+    general: { icon: '帥', title: '帥／將', description: '每次沿直線走一格，只能在九宮內活動。將與帥不能直接照面。', tip: '小提醒：保護主帥是第一要務，別讓它暴露在車、炮的攻擊線上。' },
+    advisor: { icon: '仕', title: '仕／士', description: '每次沿斜線走一格，只能在九宮內活動。它主要負責守護將／帥。', tip: '小提醒：不要為了吃小棋而隨意把士、仕移離主帥身邊。' },
+    elephant: { icon: '相', title: '相／象', description: '每次斜走兩格，俗稱「田」字走法；中間的格子若有棋子擋住就不能走，而且不能過河。', tip: '小提醒：象眼被塞住就不能走，走之前記得檢查中間點。' },
+    rook: { icon: '俥', title: '俥／車', description: '可以沿橫線或直線走任意格，但路徑中不能穿過其他棋子。車也沿直線吃子。', tip: '小提醒：車的威力很大，盡早讓車出動並打開通道。' },
+    horse: { icon: '傌', title: '傌／馬', description: '走「日」字：先直走一格再斜走一格。若第一步的相鄰格被棋子堵住，就叫「蹩馬腿」，不能走那個方向。', tip: '小提醒：馬不是可以跳過所有棋子的棋子，記得注意馬腿。' },
+    cannon: { icon: '炮', title: '炮／包', description: '不吃子時像車一樣沿直線移動；吃子時必須與目標之間恰好隔著一顆棋子，這顆棋子就是炮架。', tip: '小提醒：炮架很重要，沒有隔子就不能吃；隔了兩顆也不能吃。' },
+    soldier: { icon: '兵', title: '兵／卒', description: '過河前只能向前走一格；過河後可以向前或左右走一格，但永遠不能後退。', tip: '小提醒：兵卒過河後更有攻擊力，別忽略它們的推進。' }
   };
   const detailIcon = $('piece-detail-icon'), detailTitle = $('piece-detail-title'), detailDescription = $('piece-detail-description'), detailTip = $('piece-detail-tip');
   tutorialRoot.querySelectorAll('[data-piece]').forEach(button => button.addEventListener('click', () => {
@@ -290,22 +290,24 @@ if (tutorialRoot) {
   }));
 
   const quiz = [
-    {q:'哪一種棋子可以沿直線走任意格，直到被棋子擋住？', options:['馬','車','炮'], answer:1, explain:'答對了！車可以沿橫線或直線移動，路徑不能穿過其他棋子。'},
-    {q:'炮要吃掉對方的棋子，通常需要什麼條件？', options:['目標旁邊不能有棋子','與目標之間恰好隔一顆棋子','一定要先過河'], answer:1, explain:'答對了！炮吃子需要隔一顆棋子作為炮架。'},
-    {q:'兵／卒過河後，可以怎麼走？', options:['可以後退一格','只能向前走','可以向前或左右走一格，不能後退'], answer:2, explain:'答對了！過河後兵卒可以向前或左右走一格，但不能後退。'}
+    { q: '哪一種棋子可以沿直線走任意格，直到被棋子擋住？', options: ['馬', '車', '炮'], answer: 1, explain: '答對了！車可以沿橫線或直線移動，路徑不能穿過其他棋子。' },
+    { q: '炮要吃掉對方的棋子，通常需要什麼條件？', options: ['目標旁邊不能有棋子', '與目標之間恰好隔一顆棋子', '一定要先過河'], answer: 1, explain: '答對了！炮吃子需要隔一顆棋子作為炮架。' },
+    { q: '兵／卒過河後，可以怎麼走？', options: ['可以後退一格', '只能向前走', '可以向前或左右走一格，不能後退'], answer: 2, explain: '答對了！過河後兵卒可以向前或左右走一格，但不能後退。' }
   ];
   let quizIndex = 0, quizScore = 0, quizAnswered = false, quizFinished = false;
   const quizCount = $('quiz-count'), quizQuestion = $('quiz-question'), quizOptions = $('quiz-options'), quizFeedback = $('quiz-feedback'), quizNext = $('quiz-next');
   function renderQuiz() {
     const item = quiz[quizIndex]; quizAnswered = false; quizFinished = false;
-    quizCount.textContent = `新手測驗 · 第 ${quizIndex+1} 題，共 ${quiz.length} 題`;
-    quizQuestion.textContent = item.q; quizFeedback.textContent = '選一個答案試試看。'; quizFeedback.className = 'quiz-feedback'; quizNext.disabled = true; quizNext.textContent = quizIndex === quiz.length-1 ? '查看成績' : '下一題';
+    quizCount.textContent = `新手測驗 · 第 ${quizIndex + 1} 題，共 ${quiz.length} 題`;
+    quizQuestion.textContent = item.q; quizFeedback.textContent = '選一個答案試試看。'; quizFeedback.className = 'quiz-feedback'; quizNext.disabled = true; quizNext.textContent = quizIndex === quiz.length - 1 ? '查看成績' : '下一題';
     quizOptions.innerHTML = '';
-    item.options.forEach((label, index) => { const button = document.createElement('button'); button.type = 'button'; button.textContent = label; button.addEventListener('click', () => {
-      if (quizAnswered) return; quizAnswered = true; const correct = index === item.answer; if (correct) quizScore++;
-      [...quizOptions.children].forEach((option, optionIndex) => { option.disabled = true; if (optionIndex === item.answer) option.classList.add('correct-answer'); else if (optionIndex === index) option.classList.add('wrong-answer'); });
-      quizFeedback.textContent = (correct ? '✅ 正確！' : `❌ 正確答案是「${item.options[item.answer]}」。`) + ' ' + item.explain; quizFeedback.classList.add(correct ? 'correct' : 'wrong'); quizNext.disabled = false;
-    }); quizOptions.appendChild(button); });
+    item.options.forEach((label, index) => {
+      const button = document.createElement('button'); button.type = 'button'; button.textContent = label; button.addEventListener('click', () => {
+        if (quizAnswered) return; quizAnswered = true; const correct = index === item.answer; if (correct) quizScore++;
+        [...quizOptions.children].forEach((option, optionIndex) => { option.disabled = true; if (optionIndex === item.answer) option.classList.add('correct-answer'); else if (optionIndex === index) option.classList.add('wrong-answer'); });
+        quizFeedback.textContent = (correct ? '✅ 正確！' : `❌ 正確答案是「${item.options[item.answer]}」。`) + ' ' + item.explain; quizFeedback.classList.add(correct ? 'correct' : 'wrong'); quizNext.disabled = false;
+      }); quizOptions.appendChild(button);
+    });
   }
   quizNext.addEventListener('click', () => {
     if (quizFinished) { quizIndex = 0; quizScore = 0; renderQuiz(); return; }
@@ -384,11 +386,11 @@ async function initializeAccountSystem() {
     import('https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js'),
     import('https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js')
   ]);
-  accountApi = {...appMod, ...authMod, ...dbMod};
+  accountApi = { ...appMod, ...authMod, ...dbMod };
   const app = accountApi.getApps().find(a => a.name === 'xiangqi-player-accounts') || accountApi.initializeApp(firebaseConfig, 'xiangqi-player-accounts');
   accountAuth = accountApi.getAuth(app);
   accountDb = accountApi.getDatabase(app);
-  try { await accountApi.setPersistence(accountAuth, accountApi.browserLocalPersistence); } catch {}
+  try { await accountApi.setPersistence(accountAuth, accountApi.browserLocalPersistence); } catch { }
   if (!accountAuthListenerStarted) {
     accountAuthListenerStarted = true;
     accountApi.onAuthStateChanged(accountAuth, async user => {
@@ -407,7 +409,7 @@ async function initializeAccountSystem() {
 }
 async function loadAccountMatches(uid) {
   const renderCategory = (matches, prefix, emptyText, modeLabel) => {
-    const stats = {played: matches.length, wins: 0, losses: 0, draws: 0};
+    const stats = { played: matches.length, wins: 0, losses: 0, draws: 0 };
     for (const match of matches) {
       if (match.result === 'win') stats.wins++;
       else if (match.result === 'loss') stats.losses++;
@@ -431,7 +433,7 @@ async function loadAccountMatches(uid) {
   try {
     const snap = await accountApi.get(accountApi.ref(accountDb, `users/${uid}/matches`));
     const values = snap.val() || {};
-    const matches = Object.entries(values).map(([id, value]) => ({id, ...value})).sort((a,b) => Number(b.finishedAt || 0) - Number(a.finishedAt || 0));
+    const matches = Object.entries(values).map(([id, value]) => ({ id, ...value })).sort((a, b) => Number(b.finishedAt || 0) - Number(a.finishedAt || 0));
     // Same-device two-player games are intentionally excluded from account records.
     renderCategory(matches.filter(m => m.mode === 'pve'), 'ai', '還沒有 AI 對戰紀錄。完成一場 AI 對局後會顯示在這裡。', 'AI');
     renderCategory(matches.filter(m => m.mode === 'online'), 'online', '還沒有連線對打紀錄。完成一場多人連線對局後會顯示在這裡。', 'Online');
@@ -482,8 +484,8 @@ async function saveAccountName() {
   if (!name) { accountStatus('使用者名稱不可空白。', true); return; }
   try {
     accountStatus('正在儲存名稱…');
-    await accountApi.set(accountApi.ref(accountDb, `users/${user.uid}/profile`), {displayName:name, email:user.email || '', updatedAt:Date.now(), createdAt:accountProfile?.createdAt || Date.now()});
-    accountProfile = { ...(accountProfile || {}), displayName:name, email:user.email || '', updatedAt:Date.now() };
+    await accountApi.set(accountApi.ref(accountDb, `users/${user.uid}/profile`), { displayName: name, email: user.email || '', updatedAt: Date.now(), createdAt: accountProfile?.createdAt || Date.now() });
+    accountProfile = { ...(accountProfile || {}), displayName: name, email: user.email || '', updatedAt: Date.now() };
     localStorage.setItem('xiangqi-nickname', name);
     setAccountView(user);
     accountStatus('使用者名稱已儲存。');
