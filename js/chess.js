@@ -83,7 +83,35 @@ async function closeFinishedRoom(code = roomCode, message = '房間已關閉。'
 }
 function evaluate(board) { let s = 0; for (let i = 0; i < 90; i++) { const p = board[i]; if (!p) continue; let v = pieceValues[p.name] || 10, r = Math.floor(i / 9), c = i % 9; if (p.type === '兵' && r <= 4) v += (5 - r) * 5; if (p.type === '卒' && r >= 5) v += (r - 4) * 5; if (['車', '俥'].includes(p.type) && c === 4) v += 10; s += p.color === 'black' ? v : -v } return s }
 function minimax(board, depth, alpha, beta, maximizing) { if (depth === 0) return evaluate(board); const color = maximizing ? 'black' : 'red', moves = allLegalMoves(board, color); if (!moves.length) return maximizing ? -99999 : 99999; let best = maximizing ? -Infinity : Infinity; for (const m of moves) { const a = board[m.from], d = board[m.to]; board[m.to] = a; board[m.from] = null; const score = minimax(board, depth - 1, alpha, beta, !maximizing); board[m.from] = a; board[m.to] = d; if (maximizing) { best = Math.max(best, score); alpha = Math.max(alpha, score) } else { best = Math.min(best, score); beta = Math.min(beta, score) } if (beta <= alpha) break } return best }
-function aiTurn() { if (chessGameOver || onlineMode || !['pve', 'ranked'].includes(chessGameMode) || chessTurn !== 'black') return; setTimeout(() => { const moves = allLegalMoves(chessPieces, 'black'); if (!moves.length) return; let chosen; if (currentAiLevel === 'easy') { moves.sort((a, b) => (pieceValues[chessPieces[b.to]?.name] || 0) - (pieceValues[chessPieces[a.to]?.name] || 0)); chosen = moves[Math.floor(Math.random() * Math.min(5, moves.length))] } else if (currentAiLevel === 'medium') { let best = -Infinity, opts = []; for (const m of moves) { const a = chessPieces[m.from], d = chessPieces[m.to]; chessPieces[m.to] = a; chessPieces[m.from] = null; const score = evaluate(chessPieces) + (d ? (pieceValues[d.name] || 0) * 0.8 : 0) + (isCheck(chessPieces, 'red') ? 30 : 0); chessPieces[m.from] = a; chessPieces[m.to] = d; if (score > best) { best = score; opts = [m] } else if (score === best) opts.push(m) } chosen = opts[Math.floor(Math.random() * opts.length)] } else { let best = -Infinity, opts = []; for (const m of moves) { const a = chessPieces[m.from], d = chessPieces[m.to]; chessPieces[m.to] = a; chessPieces[m.from] = null; const s = minimax(chessPieces, chessGameMode === 'ranked' ? 2 : 1, -Infinity, Infinity, false); chessPieces[m.from] = a; chessPieces[m.to] = d; if (s > best) { best = s; opts = [m] } else if (s === best) opts.push(m) } chosen = opts[Math.floor(Math.random() * opts.length)] } applyMoveLocal(chosen) }, 450) }
+// ===== 強力 AI (高級 / 排位賽) =====
+// 實際的搜尋在 js/xiangqi-ai.js (Web Worker) 裡執行，不會卡住畫面。
+// 思考時間 (毫秒): 數字越大 AI 越強，也越慢出手。
+const AI_TIME_PVE = 1500, AI_TIME_RANKED = 3000;
+let aiWorker = null, aiThinkToken = 0;
+function aiBoardKey() { return chessPieces.map(p => p ? p.name : '').join(',') }
+function aiHardFallback(moves) { // Worker 無法使用時的備用 (舊版高級 AI)
+  let best = -Infinity, opts = [];
+  for (const m of moves) { const a = chessPieces[m.from], d = chessPieces[m.to]; chessPieces[m.to] = a; chessPieces[m.from] = null; const s = minimax(chessPieces, chessGameMode === 'ranked' ? 2 : 1, -Infinity, Infinity, false); chessPieces[m.from] = a; chessPieces[m.to] = d; if (s > best) { best = s; opts = [m] } else if (s === best) opts.push(m) }
+  return opts[Math.floor(Math.random() * opts.length)]
+}
+function aiStrongThink(moves) {
+  try { if (!aiWorker) aiWorker = new Worker(new URL('./xiangqi-ai.js?v=1', import.meta.url)) } catch (e) { aiWorker = null; return false }
+  const token = ++aiThinkToken, snap = aiBoardKey();
+  const stillValid = () => token === aiThinkToken && !chessGameOver && !onlineMode && chessTurn === 'black' && aiBoardKey() === snap;
+  const fallback = () => { if (stillValid()) applyMoveLocal(aiHardFallback(moves)) };
+  aiWorker.onerror = () => { aiWorker = null; fallback() };
+  aiWorker.onmessage = ev => {
+    if (!stillValid()) return;
+    const r = ev.data || {};
+    const chosen = moves.find(m => m.from === r.from && m.to === r.to);
+    if (!chosen) { fallback(); return }
+    applyMoveLocal(chosen)
+  };
+  setStatus('輪到 ⚫ 黑方 行棋（AI 思考中…）');
+  aiWorker.postMessage({ board: chessPieces.map(p => p ? p.name : ''), moves: moveHistory.map(m => ({ f: m.from, t: m.to })), timeMs: chessGameMode === 'ranked' ? AI_TIME_RANKED : AI_TIME_PVE, maxDepth: 40, book: true });
+  return true
+}
+function aiTurn() { if (chessGameOver || onlineMode || !['pve', 'ranked'].includes(chessGameMode) || chessTurn !== 'black') return; setTimeout(() => { const moves = allLegalMoves(chessPieces, 'black'); if (!moves.length) return; if (currentAiLevel === 'hard' && aiStrongThink(moves)) return; let chosen; if (currentAiLevel === 'easy') { moves.sort((a, b) => (pieceValues[chessPieces[b.to]?.name] || 0) - (pieceValues[chessPieces[a.to]?.name] || 0)); chosen = moves[Math.floor(Math.random() * Math.min(5, moves.length))] } else if (currentAiLevel === 'medium') { let best = -Infinity, opts = []; for (const m of moves) { const a = chessPieces[m.from], d = chessPieces[m.to]; chessPieces[m.to] = a; chessPieces[m.from] = null; const score = evaluate(chessPieces) + (d ? (pieceValues[d.name] || 0) * 0.8 : 0) + (isCheck(chessPieces, 'red') ? 30 : 0); chessPieces[m.from] = a; chessPieces[m.to] = d; if (score > best) { best = score; opts = [m] } else if (score === best) opts.push(m) } chosen = opts[Math.floor(Math.random() * opts.length)] } else { let best = -Infinity, opts = []; for (const m of moves) { const a = chessPieces[m.from], d = chessPieces[m.to]; chessPieces[m.to] = a; chessPieces[m.from] = null; const s = minimax(chessPieces, chessGameMode === 'ranked' ? 2 : 1, -Infinity, Infinity, false); chessPieces[m.from] = a; chessPieces[m.to] = d; if (s > best) { best = s; opts = [m] } else if (s === best) opts.push(m) } chosen = opts[Math.floor(Math.random() * opts.length)] } applyMoveLocal(chosen) }, 450) }
 function makeCode() { const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let s = ''; for (let i = 0; i < 6; i++)s += chars[Math.floor(Math.random() * chars.length)]; return s }
 async function connectFirebase() {
   if (firebaseConfig.apiKey === 'YOUR_API_KEY' || firebaseConfig.databaseURL.includes('YOUR_DATABASE')) { $('online-status').textContent = '請先編輯 js/firebase-config.js，填入 Firebase Console 的真實設定。'; return }
