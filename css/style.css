@@ -2218,3 +2218,33 @@ body.has-site-announcement {
     background: linear-gradient(90deg, #f4bf45, #ff8a3d);
     transition: width .4s ease
 }
+
+/* 技術加成說明 */
+.ranked-panel>.ranked-skill,
+.ranked-panel>.ranked-rules {
+    grid-column: 1/-1;
+    margin: 0
+}
+
+.ranked-skill {
+    font-size: 14px;
+    line-height: 1.6;
+    color: #f4bf45;
+    min-height: 1.6em
+}
+
+.ranked-rules summary {
+    cursor: pointer;
+    font-weight: 700
+}
+
+.ranked-rules ul {
+    margin: 8px 0 4px 18px;
+    padding: 0;
+    line-height: 1.8;
+    font-size: 14px
+}
+
+.ranked-rules p {
+    margin: 4px 0 0
+}
