@@ -36,7 +36,7 @@ function configureFinishedModal(mode = 'finished') {
 }
 function setResultStamp(isWinner) { const stamp = $('result-stamp'); if (!stamp) return; stamp.textContent = isWinner ? '勝' : '敗'; stamp.classList.toggle('stamp-win', isWinner); stamp.classList.toggle('stamp-loss', !isWinner); stamp.hidden = false }
 async function savePlayerMatch(match) { try { if (!user || user.isAnonymous || !db || !firebaseApi || !match?.matchId || savedMatchIds.has(match.matchId)) return; savedMatchIds.add(match.matchId); const profileSnap = await get(ref(db, `users/${user.uid}/profile`)); const profile = profileSnap.val() || {}; if (!profile.displayName) { savedMatchIds.delete(match.matchId); return } const data = { id: match.matchId, mode: match.mode, result: match.result, reason: String(match.reason || '').slice(0, 160), finishedAt: Number(match.finishedAt || Date.now()), moveCount: Number(match.moveCount || 0), aiLevel: match.aiLevel || null, opponentName: String(match.opponentName || '').slice(0, 30), roomCode: match.roomCode || null, displayName: profile.displayName }; await set(ref(db, `users/${user.uid}/matches/${match.matchId.replace(/[^A-Za-z0-9_-]/g, '_')}`), data); } catch (e) { savedMatchIds.delete(match.matchId); console.warn('對戰紀錄儲存失敗，請確認 Firebase Rules 已允許本人寫入 users/{uid}/matches', e) } }
-function finishGame(winner, reason) { chessGameOver = true; $('check-banner').classList.remove('show'); setResultStamp(!onlineMode ? (winner === 'red' || (chessGameMode === 'pvp' && winner === 'black')) : winner === myColor); $('winner-message').textContent = winnerMessage(winner); $('winner-reason').textContent = reason; configureFinishedModal('finished'); showModal('win-modal'); if (onlineMode && roomCode) { const finishedAt = Date.now(); update(ref(db, `rooms/${roomCode}`), { status: 'finished', winner, reason, winnerName: getSideName(winner), loserName: getSideName(winner === 'red' ? 'black' : 'red'), board: chessPieces, turn: chessTurn, finishedAt }).catch(console.error) } else if (['pve', 'ranked'].includes(chessGameMode)) { const result = winner === 'red' ? 'win' : 'loss'; savePlayerMatch({ matchId: currentGameId, mode: chessGameMode === 'ranked' ? 'ranked' : 'pve', result, winner, reason, finishedAt: Date.now(), moveCount: moveHistory.length, aiLevel: currentAiLevel, opponentName: chessGameMode === 'ranked' ? '排位 AI' : `AI（${currentAiLevel === 'easy' ? '初級' : currentAiLevel === 'medium' ? '中級' : '高級'}）` }); if (chessGameMode === 'ranked') recordRankedResult(result, rankedQuality, moveHistory.length); } }
+function finishGame(winner, reason) { chessGameOver = true; $('check-banner').classList.remove('show'); setResultStamp(!onlineMode ? (winner === 'red' || (chessGameMode === 'pvp' && winner === 'black')) : winner === myColor); $('winner-message').textContent = winnerMessage(winner); $('winner-reason').textContent = reason; configureFinishedModal('finished'); showModal('win-modal'); if (onlineMode && roomCode) { const finishedAt = Date.now(); update(ref(db, `rooms/${roomCode}`), { status: 'finished', winner, reason, winnerName: getSideName(winner), loserName: getSideName(winner === 'red' ? 'black' : 'red'), board: chessPieces, turn: chessTurn, finishedAt }).catch(console.error) } else if (['pve', 'ranked'].includes(chessGameMode)) { const result = winner === 'red' ? 'win' : 'loss'; savePlayerMatch({ matchId: currentGameId, mode: chessGameMode === 'ranked' ? 'ranked' : 'pve', result, winner, reason, finishedAt: Date.now(), moveCount: moveHistory.length, aiLevel: currentAiLevel, opponentName: chessGameMode === 'ranked' ? '排位 AI' : `AI（${currentAiLevel === 'hard' ? '大師' : '新手'}）` }); if (chessGameMode === 'ranked') recordRankedResult(result, rankedQuality, moveHistory.length); } }
 async function publishRoomNotice(type, extra = {}) {
   if (!roomCode || !db || !user) throw new Error('目前沒有有效的連線房間');
   const code = roomCode;
@@ -86,7 +86,8 @@ function minimax(board, depth, alpha, beta, maximizing) { if (depth === 0) retur
 // ===== 強力 AI (高級 / 排位賽) =====
 // 實際的搜尋在 js/xiangqi-ai.js (Web Worker) 裡執行，不會卡住畫面。
 // 思考時間 (毫秒): 數字越大 AI 越強，也越慢出手。
-const AI_TIME_PVE = 1500, AI_TIME_RANKED = 3000;
+const AI_TIME_PVE = 1500; // 單機「大師」的思考時間 (毫秒)。排位賽的強度由上面的 RANK_TIERS 決定
+const AI_NOVICE = { scored: true, depth: 2, margin: 110, blunder: 0.25 }; // 單機「新手」: 看 2 步、偶爾亂走
 let aiWorker = null, aiThinkToken = 0;
 function aiBoardKey() { return chessPieces.map(p => p ? p.name : '').join(',') }
 function aiHardFallback(moves) { // Worker 無法使用時的備用 (舊版高級 AI)
@@ -94,11 +95,15 @@ function aiHardFallback(moves) { // Worker 無法使用時的備用 (舊版高�
   for (const m of moves) { const a = chessPieces[m.from], d = chessPieces[m.to]; chessPieces[m.to] = a; chessPieces[m.from] = null; const s = minimax(chessPieces, chessGameMode === 'ranked' ? 2 : 1, -Infinity, Infinity, false); chessPieces[m.from] = a; chessPieces[m.to] = d; if (s > best) { best = s; opts = [m] } else if (s === best) opts.push(m) }
   return opts[Math.floor(Math.random() * opts.length)]
 }
+function aiNoviceFallback(moves) { // Worker 無法使用時的備用 (舊版初級 AI)
+  moves.sort((a, b) => (pieceValues[chessPieces[b.to]?.name] || 0) - (pieceValues[chessPieces[a.to]?.name] || 0));
+  return moves[Math.floor(Math.random() * Math.min(5, moves.length))]
+}
 function aiStrongThink(moves) {
   try { if (!aiWorker) aiWorker = new Worker(new URL('./xiangqi-ai.js?v=1', import.meta.url)) } catch (e) { aiWorker = null; return false }
   const token = ++aiThinkToken, snap = aiBoardKey();
   const stillValid = () => token === aiThinkToken && !chessGameOver && !onlineMode && chessTurn === 'black' && aiBoardKey() === snap;
-  const fallback = () => { if (stillValid()) applyMoveLocal(aiHardFallback(moves)) };
+  const fallback = () => { if (stillValid()) applyMoveLocal(currentAiLevel === 'hard' ? aiHardFallback(moves) : aiNoviceFallback(moves)) };
   aiWorker.onerror = () => { aiWorker = null; fallback() };
   aiWorker.onmessage = ev => {
     if (!stillValid()) return;
@@ -108,10 +113,10 @@ function aiStrongThink(moves) {
     applyMoveLocal(chosen)
   };
   setStatus('輪到 ⚫ 黑方 行棋（AI 思考中…）');
-  aiWorker.postMessage({ board: chessPieces.map(p => p ? p.name : ''), moves: moveHistory.map(m => ({ f: m.from, t: m.to })), timeMs: chessGameMode === 'ranked' ? AI_TIME_RANKED : AI_TIME_PVE, maxDepth: 40, book: true });
+  aiWorker.postMessage({ board: chessPieces.map(p => p ? p.name : ''), moves: moveHistory.map(m => ({ f: m.from, t: m.to })), timeMs: (chessGameMode === 'ranked' && rankInfo(rankedRatingCache).tier.ai.timeMs) || AI_TIME_PVE, maxDepth: 40, book: true, level: chessGameMode === 'ranked' ? rankInfo(rankedRatingCache).tier.ai : (currentAiLevel === 'hard' ? null : AI_NOVICE) });
   return true
 }
-function aiTurn() { if (chessGameOver || onlineMode || !['pve', 'ranked'].includes(chessGameMode) || chessTurn !== 'black') return; setTimeout(() => { const moves = allLegalMoves(chessPieces, 'black'); if (!moves.length) return; if (currentAiLevel === 'hard' && aiStrongThink(moves)) return; let chosen; if (currentAiLevel === 'easy') { moves.sort((a, b) => (pieceValues[chessPieces[b.to]?.name] || 0) - (pieceValues[chessPieces[a.to]?.name] || 0)); chosen = moves[Math.floor(Math.random() * Math.min(5, moves.length))] } else if (currentAiLevel === 'medium') { let best = -Infinity, opts = []; for (const m of moves) { const a = chessPieces[m.from], d = chessPieces[m.to]; chessPieces[m.to] = a; chessPieces[m.from] = null; const score = evaluate(chessPieces) + (d ? (pieceValues[d.name] || 0) * 0.8 : 0) + (isCheck(chessPieces, 'red') ? 30 : 0); chessPieces[m.from] = a; chessPieces[m.to] = d; if (score > best) { best = score; opts = [m] } else if (score === best) opts.push(m) } chosen = opts[Math.floor(Math.random() * opts.length)] } else { let best = -Infinity, opts = []; for (const m of moves) { const a = chessPieces[m.from], d = chessPieces[m.to]; chessPieces[m.to] = a; chessPieces[m.from] = null; const s = minimax(chessPieces, chessGameMode === 'ranked' ? 2 : 1, -Infinity, Infinity, false); chessPieces[m.from] = a; chessPieces[m.to] = d; if (s > best) { best = s; opts = [m] } else if (s === best) opts.push(m) } chosen = opts[Math.floor(Math.random() * opts.length)] } applyMoveLocal(chosen) }, 450) }
+function aiTurn() { if (chessGameOver || onlineMode || !['pve', 'ranked'].includes(chessGameMode) || chessTurn !== 'black') return; setTimeout(() => { const moves = allLegalMoves(chessPieces, 'black'); if (!moves.length) return; if (aiStrongThink(moves)) return; let chosen; if (currentAiLevel === 'easy') { moves.sort((a, b) => (pieceValues[chessPieces[b.to]?.name] || 0) - (pieceValues[chessPieces[a.to]?.name] || 0)); chosen = moves[Math.floor(Math.random() * Math.min(5, moves.length))] } else if (currentAiLevel === 'medium') { let best = -Infinity, opts = []; for (const m of moves) { const a = chessPieces[m.from], d = chessPieces[m.to]; chessPieces[m.to] = a; chessPieces[m.from] = null; const score = evaluate(chessPieces) + (d ? (pieceValues[d.name] || 0) * 0.8 : 0) + (isCheck(chessPieces, 'red') ? 30 : 0); chessPieces[m.from] = a; chessPieces[m.to] = d; if (score > best) { best = score; opts = [m] } else if (score === best) opts.push(m) } chosen = opts[Math.floor(Math.random() * opts.length)] } else { let best = -Infinity, opts = []; for (const m of moves) { const a = chessPieces[m.from], d = chessPieces[m.to]; chessPieces[m.to] = a; chessPieces[m.from] = null; const s = minimax(chessPieces, chessGameMode === 'ranked' ? 2 : 1, -Infinity, Infinity, false); chessPieces[m.from] = a; chessPieces[m.to] = d; if (s > best) { best = s; opts = [m] } else if (s === best) opts.push(m) } chosen = opts[Math.floor(Math.random() * opts.length)] } applyMoveLocal(chosen) }, 450) }
 function makeCode() { const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let s = ''; for (let i = 0; i < 6; i++)s += chars[Math.floor(Math.random() * chars.length)]; return s }
 async function connectFirebase() {
   if (firebaseConfig.apiKey === 'YOUR_API_KEY' || firebaseConfig.databaseURL.includes('YOUR_DATABASE')) { $('online-status').textContent = '請先編輯 js/firebase-config.js，填入 Firebase Console 的真實設定。'; return }
@@ -552,9 +557,44 @@ function accountEsc(v) { return String(v ?? '').replace(/[&<>"']/g, c => ({ '&':
 function accountSetStatus(msg, isError = false) { const n = $('account-status'); if (n) { n.textContent = msg || ''; n.classList.toggle('is-error', !!isError) } }
 function accountValidEmail(value) { const e = String(value || '').trim(); return e.length <= 254 && !/\s/.test(e) && /^[A-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?(?:\.[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?)+$/i.test(e) }
 const RANKED_START = 1000;
-function ratingTier(r) { return r >= 1800 ? '宗師' : r >= 1600 ? '大師' : r >= 1400 ? '菁英' : r >= 1200 ? '高手' : r >= 1000 ? '進階' : '新手' }
-async function loadRankedRating() { const node = $('ranked-rating'); if (!node) return; if (!user || user.isAnonymous || !db || !firebaseApi) { node.textContent = '登入後查看'; return } try { const snap = await get(ref(db, `users/${user.uid}/ranked`)); node.textContent = Number(snap.val()?.rating || RANKED_START) } catch { node.textContent = '—' } }
-async function recordRankedResult(result, quality, moveCount) { if (!user || user.isAnonymous || !db || !firebaseApi) { accountSetStatus('排位賽不會記錄：請先登入帳號再開始排位對戰。', true); return } try { const uid = user.uid; const profileSnap = await get(ref(db, `users/${uid}/profile`)); const profile = profileSnap.val() || {}; if (!profile.displayName) { accountSetStatus('帳號名稱尚未載入，請重新整理後再開始排位賽。', true); return } const oldSnap = await get(ref(db, `users/${uid}/ranked`)); const old = oldSnap.val() || {}; const rating = Number(old.rating || RANKED_START); const skillBonus = Math.max(0, Math.min(12, Math.round(Number(quality || 0) / Math.max(1, moveCount / 12)))); const delta = result === 'win' ? 20 + skillBonus : result === 'loss' ? -(12 + Math.min(8, skillBonus)) : 4 + Math.min(6, skillBonus); const next = Math.max(0, rating + delta); const stats = old.stats || {}; const nextStats = { played: Number(stats.played || 0) + 1, wins: Number(stats.wins || 0) + (result === 'win' ? 1 : 0), losses: Number(stats.losses || 0) + (result === 'loss' ? 1 : 0), draws: Number(stats.draws || 0) + (result === 'draw' ? 1 : 0) }; const data = { uid, displayName: profile.displayName, rating: next, tier: ratingTier(next), delta, lastResult: result, skillBonus, stats: nextStats, updatedAt: Date.now() }; await set(ref(db, `users/${uid}/ranked`), data); await set(ref(db, `rankedLeaderboard/${uid}`), data); $('ranked-rating').textContent = next; accountSetStatus(`排位結果已記錄：${delta >= 0 ? '+' : ''}${delta} 分（技術加成 +${skillBonus}），目前 ${next} 分。`); } catch (e) { accountSetStatus(`排位積分保存失敗：${e.message || e}。請更新 Firebase Rules。`, true) } }
+// ===== 排位段位系統 =====
+// from: 段位起始積分; step: 每個小階(I/II/III)需要的積分; win/loss: 該段位勝敗基礎分
+// ai: 該段位對手 AI 的強度 (scored = 固定深度 + 隨機失誤; timeMs = 正常思考時間)
+// 青銅~黃金「不會掉段」，而且對手很弱、贏一場加分多，打幾場就能升上去。
+const RANK_TIERS = [
+  { name: '青銅', from: 1000, step: 40, win: 30, loss: -5, ai: { scored: true, depth: 1, margin: 140, blunder: 0.35 } },
+  { name: '白銀', from: 1120, step: 50, win: 28, loss: -8, ai: { scored: true, depth: 2, margin: 90, blunder: 0.18 } },
+  { name: '黃金', from: 1270, step: 60, win: 26, loss: -10, ai: { scored: true, depth: 3, margin: 45, blunder: 0.07 } },
+  { name: '鑽石', from: 1450, step: 80, win: 24, loss: -12, ai: { scored: true, depth: 4, margin: 15, blunder: 0 } },
+  { name: '神話', from: 1690, step: 100, win: 22, loss: -14, ai: { timeMs: 1000 } },
+  { name: '傳奇', from: 1990, step: 120, win: 20, loss: -16, ai: { timeMs: 2000 } },
+  { name: '宗師', from: 2350, step: 0, win: 20, loss: -18, ai: { timeMs: 3500 } }
+];
+const RANK_ROMAN = ['I', 'II', 'III'];
+function rankInfo(r) {
+  r = Number(r) || 0;
+  let idx = 0;
+  for (let i = RANK_TIERS.length - 1; i >= 0; i--) if (r >= RANK_TIERS[i].from) { idx = i; break }
+  const t = RANK_TIERS[idx];
+  if (!t.step) return { tier: t, idx, name: t.name, next: 0, nextName: '', progress: 1 };
+  const sub = Math.max(0, Math.min(2, Math.floor((r - t.from) / t.step)));
+  const base = t.from + sub * t.step, nt = RANK_TIERS[idx + 1];
+  const nextName = sub < 2 ? `${t.name} ${RANK_ROMAN[sub + 1]}` : (nt.step ? `${nt.name} I` : nt.name);
+  return { tier: t, idx, name: `${t.name} ${RANK_ROMAN[sub]}`, next: base + t.step, nextName, progress: Math.max(0, Math.min(1, (r - base) / t.step)) };
+}
+function ratingTier(r) { return rankInfo(r).name }
+function rankProtectFloor(r) { const i = rankInfo(r); return i.idx > 2 ? 0 : (i.idx === 0 ? Math.min(r, 1000) : i.tier.from) } // 青銅~黃金不掉段
+let rankedRatingCache = 1000;
+function renderRankedTier(r) {
+  const t = $('ranked-tier'), f = $('ranked-bar-fill');
+  if (!t) return;
+  if (r == null) { t.textContent = '登入後才會記錄段位'; if (f) f.style.width = '0%'; return }
+  const i = rankInfo(r);
+  t.textContent = i.name + (i.next ? `　再 ${i.next - r} 分升到 ${i.nextName}` : '　已達最高段位');
+  if (f) f.style.width = Math.round(i.progress * 100) + '%'
+}
+async function loadRankedRating() { const node = $('ranked-rating'); if (!node) return; if (!user || user.isAnonymous || !db || !firebaseApi) { node.textContent = '登入後查看'; rankedRatingCache = RANKED_START; renderRankedTier(null); return } try { const snap = await get(ref(db, `users/${user.uid}/ranked`)); const r0 = Number(snap.val()?.rating || RANKED_START); rankedRatingCache = r0; node.textContent = r0; renderRankedTier(r0) } catch { node.textContent = '—' } }
+async function recordRankedResult(result, quality, moveCount) { if (!user || user.isAnonymous || !db || !firebaseApi) { accountSetStatus('排位賽不會記錄：請先登入帳號再開始排位對戰。', true); return } try { const uid = user.uid; const profileSnap = await get(ref(db, `users/${uid}/profile`)); const profile = profileSnap.val() || {}; if (!profile.displayName) { accountSetStatus('帳號名稱尚未載入，請重新整理後再開始排位賽。', true); return } const oldSnap = await get(ref(db, `users/${uid}/ranked`)); const old = oldSnap.val() || {}; const rating = Number(old.rating || RANKED_START); const skillBonus = Math.max(0, Math.min(12, Math.round(Number(quality || 0) / Math.max(1, moveCount / 12)))); const ti = rankInfo(rating).tier; const delta = result === 'win' ? ti.win + skillBonus : result === 'loss' ? ti.loss : 4 + Math.min(6, skillBonus); const next = Math.max(rankProtectFloor(rating), rating + delta); const stats = old.stats || {}; const nextStats = { played: Number(stats.played || 0) + 1, wins: Number(stats.wins || 0) + (result === 'win' ? 1 : 0), losses: Number(stats.losses || 0) + (result === 'loss' ? 1 : 0), draws: Number(stats.draws || 0) + (result === 'draw' ? 1 : 0) }; const data = { uid, displayName: profile.displayName, rating: next, tier: ratingTier(next), delta, lastResult: result, skillBonus, stats: nextStats, updatedAt: Date.now() }; await set(ref(db, `users/${uid}/ranked`), data); await set(ref(db, `rankedLeaderboard/${uid}`), data); $('ranked-rating').textContent = next; rankedRatingCache = next; renderRankedTier(next); const tOld = ratingTier(rating), tNew = ratingTier(next), promo = tNew === tOld ? '' : (next > rating ? ` 🎉 升級到 ${tNew}！` : ` 降到 ${tNew}`); const wr = $('winner-reason'); if (wr) wr.textContent += `｜排位 ${delta >= 0 ? '+' : ''}${delta} 分 → ${next} 分（${tNew}）${promo}`; accountSetStatus(`排位結果已記錄：${delta >= 0 ? '+' : ''}${delta} 分（技術加成 +${skillBonus}），目前 ${next} 分・${tNew}${promo}。`); } catch (e) { accountSetStatus(`排位積分保存失敗：${e.message || e}。請更新 Firebase Rules。`, true) } }
 async function showRankedLeaderboard() { const box = $('ranked-leaderboard'); box.hidden = false; box.innerHTML = '<p>排行榜載入中…</p>'; if (!db || !firebaseApi) { box.innerHTML = '<p>目前無法連線 Firebase。</p>'; return } try { const snap = await get(ref(db, 'rankedLeaderboard')); const rows = Object.values(snap.val() || {}).sort((a, b) => Number(b.rating || 0) - Number(a.rating || 0)).slice(0, 10); box.innerHTML = rows.length ? rows.map((r, i) => `<div class="ranked-row"><span><b>#${i + 1}</b>　${accountEsc(r.displayName || '棋手')} <small>· ${accountEsc(r.tier || ratingTier(Number(r.rating || 1000)))}</small></span><strong>${Number(r.rating || 1000)} 分</strong></div>`).join('') : '<p>排行榜還沒有紀錄，登入後完成排位賽即可上榜。</p>' } catch (e) { box.innerHTML = `<p>讀取排行榜失敗：${accountEsc(e.message || e)}。請檢查 Firebase Rules。</p>` } }
 $('ranked-leaderboard-btn')?.addEventListener('click', showRankedLeaderboard);
 function accountCleanName(v) { return String(v || '').replace(/[<>\u0000-\u001f]/g, '').trim().slice(0, 18) }
@@ -599,7 +639,7 @@ async function loadChessAccountMatches() {
       listNode.innerHTML = items.slice(0, 12).map(match => {
         const resultText = match.result === 'win' ? '勝利' : match.result === 'loss' ? '失敗' : '平手';
         const resultClass = match.result === 'win' ? 'match-win' : match.result === 'loss' ? 'match-loss' : 'match-draw';
-        const level = match.aiLevel === 'easy' ? '初級' : match.aiLevel === 'medium' ? '中級' : '高級';
+        const level = match.aiLevel === 'hard' ? '大師' : '新手';
         const title = prefix === 'ai' ? `AI 對戰（${level}）` : '多人連線對戰';
         const finishedAt = accountEsc(new Date(Number(match.finishedAt || 0)).toLocaleString('zh-TW'));
         const moveCount = Number(match.moveCount || 0);

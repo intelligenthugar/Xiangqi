@@ -2190,3 +2190,31 @@ body.has-site-announcement {
 .account-text-link:hover {
     color: #a8caff !important
 }
+/* 排位段位顯示 */
+.ranked-score {
+    min-width: 180px
+}
+
+.ranked-tier {
+    font-style: normal;
+    font-size: 13px;
+    margin-top: 4px;
+    color: var(--text-color)
+}
+
+.ranked-bar {
+    height: 8px;
+    margin-top: 8px;
+    border-radius: 99px;
+    background: rgba(128, 128, 128, .25);
+    overflow: hidden
+}
+
+.ranked-bar i {
+    display: block;
+    height: 100%;
+    width: 0;
+    border-radius: 99px;
+    background: linear-gradient(90deg, #f4bf45, #ff8a3d);
+    transition: width .4s ease
+}

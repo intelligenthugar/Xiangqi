@@ -5,7 +5,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
   <title>中國象棋</title>
-  <link rel="stylesheet" href="css/style.css?v=20261028-restart-confirm-v46">
+  <link rel="stylesheet" href="css/style.css?v=20261108-rank-v47">
 </head>
 
 <body class="dark-mode site-pages">
@@ -79,15 +79,14 @@
         <option value="ranked">🏆 排位挑戰（積分）</option>
         <option value="pvp">雙人對戰（同裝置）</option>
       </select><select id="chess-ai-level">
-        <option value="easy">AI：初級</option>
-        <option value="medium">AI：中級</option>
-        <option value="hard" selected>AI：高級</option>
+        <option value="easy">AI：新手</option>
+        <option value="hard" selected>AI：大師</option>
       </select><button id="restart-btn">重來</button></div>
     <section id="ranked-panel" class="ranked-panel" hidden>
       <div><strong>🏆 AI 排位挑戰</strong>
         <p>只有登入帳號才會記錄積分並登上排行榜。勝敗決定基礎分，吃子與將軍等走法表現會影響技術加成。</p>
       </div>
-      <div class="ranked-score"><span>目前積分</span><strong id="ranked-rating">1000</strong></div><button
+      <div class="ranked-score"><span>目前積分</span><strong id="ranked-rating">1000</strong><em id="ranked-tier" class="ranked-tier">青銅 I</em><div class="ranked-bar"><i id="ranked-bar-fill"></i></div></div><button
         id="ranked-leaderboard-btn" type="button">查看排行榜</button>
       <div id="ranked-leaderboard" class="ranked-leaderboard" hidden></div>
     </section>

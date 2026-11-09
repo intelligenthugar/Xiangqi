@@ -350,6 +350,30 @@ function think(timeMs, maxDepth, histKeys) {
   return { m: best, depth: reached, score: bestScore };
 }
 
+// 弱化模式 (低段位用): 固定深度對每一步完整評分, 再從「接近最佳」的走法裡隨機挑,
+// 並有一定機率故意走爛棋 (但不會直接送車炮或被一步殺)。
+function scoredMove(depth, margin, blunder, histKeys) {
+  HSET = new Set(histKeys); PATH = [key()]; NODES = 0; DEADLINE = Date.now() + 20000;
+  TT.clear(); HIST.fill(0);
+  for (const kl of KILL) { kl[0] = 0; kl[1] = 0; }
+  const moves = legal();
+  if (!moves.length) return null;
+  const sc = [];
+  for (const m of moves) {
+    const cap = make(m);
+    sc.push(-nega(depth - 1, -MATE - 1, MATE + 1, 1));
+    unmake(m, cap);
+  }
+  let best = -Infinity;
+  for (const x of sc) if (x > best) best = x;
+  let pool;
+  if (best > MATE - 200) pool = moves.filter((m, i) => sc[i] === best);        // 有殺棋就一定走
+  else if (Math.random() < blunder) pool = moves.filter((m, i) => sc[i] >= best - 350);
+  else pool = moves.filter((m, i) => sc[i] >= best - margin);
+  const m = pool[Math.floor(Math.random() * pool.length)];
+  return { m, depth, score: sc[moves.indexOf(m)] };
+}
+
 // 重播棋譜以取得歷史局面 (用來避免重複局面)
 function historyKeys(mvs, names) {
   setup(START_NAMES, RED);
@@ -375,7 +399,10 @@ function handle(data) {
       return { from: m >> 7, to: m & 127, depth: 0, score: 0, book: true };
     }
   }
-  const r = think(data.timeMs || 1500, data.maxDepth || 40, keys);
+  const lv = data.level;
+  const r = lv && lv.scored
+    ? scoredMove(lv.depth, lv.margin || 0, lv.blunder || 0, keys)
+    : think(data.timeMs || 1500, data.maxDepth || 40, keys);
   if (!r) return { from: -1, to: -1, depth: 0, score: 0 };
   return { from: r.m >> 7, to: r.m & 127, depth: r.depth, score: r.score, nodes: NODES };
 }
@@ -386,4 +413,4 @@ if (typeof self !== 'undefined' && typeof importScripts === 'function') {
     catch (err) { self.postMessage({ error: String(err) }); }
   };
 }
-if (typeof module !== 'undefined') module.exports = { handle, setup, legal, make, unmake, think, START_NAMES, B };
+if (typeof module !== 'undefined') module.exports = { scoredMove, handle, setup, legal, make, unmake, think, START_NAMES, B };
